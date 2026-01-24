@@ -144,3 +144,4 @@ CREATE POLICY "Users can insert transaction_assignments" ON transaction_assignme
 CREATE POLICY "Users can update transaction_assignments" ON transaction_assignments FOR UPDATE USING (auth.role() = 'authenticated');
 CREATE POLICY "Users can delete transaction_assignments" ON transaction_assignments FOR DELETE USING (auth.role() = 'authenticated');
 
+

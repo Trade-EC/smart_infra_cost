@@ -178,3 +178,4 @@ Edita las clases de Tailwind en los componentes:
 
 **¿Necesitas ayuda?** Revisa los comentarios en el código o consulta la documentación de Supabase.
 
+

@@ -4,23 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-
-interface NavItem {
-  name: string
-  href: string
-  icon: string
-}
-
-const navigation: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-  { name: 'Clientes', href: '/clients', icon: '👥' },
-  { name: 'Aplicaciones', href: '/applications', icon: '📱' },
-  { name: 'Costos', href: '/costs', icon: '💰' },
-  { name: 'Transacciones', href: '/transactions', icon: '💳' },
-  { name: 'Reportes', href: '/reports', icon: '📈' },
-]
+import { useTranslation } from '@/lib/i18n/useTranslation'
+import { NAVIGATION_ITEMS } from '@/constants'
+import type { NavItem } from '@/types'
 
 export default function Sidebar() {
+  const { t } = useTranslation()
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -35,16 +24,16 @@ export default function Sidebar() {
     <div className="flex h-screen w-64 flex-col bg-gray-900 text-white">
       {/* Logo/Header */}
       <div className="flex h-16 items-center justify-center border-b border-gray-800 px-4">
-        <h1 className="text-xl font-bold">CostManager TRD</h1>
+        <h1 className="text-xl font-bold">{t('appName')}</h1>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
+        {NAVIGATION_ITEMS.map((item: NavItem) => {
           const isActive = pathname === item.href
           return (
             <Link
-              key={item.name}
+              key={item.key}
               href={item.href}
               className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
@@ -53,7 +42,7 @@ export default function Sidebar() {
               }`}
             >
               <span className="text-lg">{item.icon}</span>
-              <span>{item.name}</span>
+              <span>{t(`nav.${item.key}`)}</span>
             </Link>
           )
         })}
@@ -66,7 +55,7 @@ export default function Sidebar() {
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
         >
           <span className="text-lg">🚪</span>
-          <span>Cerrar Sesión</span>
+          <span>{t('nav.logout')}</span>
         </button>
       </div>
     </div>
