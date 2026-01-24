@@ -9,7 +9,7 @@ export default async function RegisterLayout({
   // Si ya hay sesión, redirigir al dashboard
   const session = await getSession()
   if (session) {
-    redirect('/dashboard')
+    redirect('/app/dashboard')
   }
 
   return <>{children}</>

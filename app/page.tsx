@@ -6,7 +6,7 @@ export default async function Home() {
   
   // Si hay sesión, redirigir al dashboard protegido
   if (session) {
-    redirect('/dashboard')
+    redirect('/app/dashboard')
   }
   
   // Si no hay sesión, redirigir al login

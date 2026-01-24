@@ -9,7 +9,7 @@ export default async function LoginLayout({
   // Si ya hay sesión, redirigir al dashboard
   const session = await getSession()
   if (session) {
-    redirect('/dashboard')
+    redirect('/app/dashboard')
   }
 
   return <>{children}</>
