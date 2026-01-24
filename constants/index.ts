@@ -1,11 +1,11 @@
 // Navigation items
 export const NAVIGATION_ITEMS = [
   { key: 'dashboard', href: '/dashboard', icon: '📊' },
-  { key: 'clients', href: '/clients', icon: '👥' },
-  { key: 'applications', href: '/applications', icon: '📱' },
-  { key: 'costs', href: '/costs', icon: '💰' },
-  { key: 'transactions', href: '/transactions', icon: '💳' },
-  { key: 'reports', href: '/reports', icon: '📈' },
+  { key: 'clients', href: '/app/clients', icon: '👥' },
+  { key: 'applications', href: '/app/applications', icon: '📱' },
+  { key: 'costs', href: '/app/costs', icon: '💰' },
+  { key: 'transactions', href: '/app/transactions', icon: '💳' },
+  { key: 'reports', href: '/app/reports', icon: '📈' },
 ] as const
 
 // Routes
@@ -14,11 +14,11 @@ export const ROUTES = {
   LOGIN: '/login',
   REGISTER: '/register',
   DASHBOARD: '/dashboard',
-  CLIENTS: '/clients',
-  APPLICATIONS: '/applications',
-  COSTS: '/costs',
-  TRANSACTIONS: '/transactions',
-  REPORTS: '/reports',
+  CLIENTS: '/app/clients',
+  APPLICATIONS: '/app/applications',
+  COSTS: '/app/costs',
+  TRANSACTIONS: '/app/transactions',
+  REPORTS: '/app/reports',
 } as const
 
 // CSV Configuration

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useTranslation } from '@/lib/i18n/useTranslation'
+import type { TranslationKey } from '@/lib/i18n/useTranslation'
 import { NAVIGATION_ITEMS } from '@/constants'
 import type { NavItem } from '@/types'
 
@@ -42,7 +43,7 @@ export default function Sidebar() {
               }`}
             >
               <span className="text-lg">{item.icon}</span>
-              <span>{t(`nav.${item.key}`)}</span>
+              <span>{t(`nav.${item.key}` as TranslationKey)}</span>
             </Link>
           )
         })}
