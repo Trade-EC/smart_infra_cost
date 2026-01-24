@@ -1,0 +1,4 @@
+export { ClientsRepository } from './clientsRepository'
+export { ApplicationsRepository } from './applicationsRepository'
+export { MonthlyCostsRepository } from './monthlyCostsRepository'
+export { TransactionsRepository } from './transactionsRepository'

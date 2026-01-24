@@ -62,3 +62,4 @@ Una vez ejecutada la migración:
 3. Podrás asignar múltiples clientes a cada aplicación
 4. Los clientes asignados se mostrarán como badges
 
+

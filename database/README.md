@@ -85,3 +85,4 @@ transactions
 
 Todas las tablas tienen Row Level Security (RLS) habilitado, permitiendo solo operaciones a usuarios autenticados.
 
+

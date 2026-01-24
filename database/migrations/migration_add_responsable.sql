@@ -27,3 +27,4 @@ CREATE POLICY "Users can insert application_clients" ON application_clients FOR 
 CREATE POLICY "Users can update application_clients" ON application_clients FOR UPDATE USING (auth.role() = 'authenticated');
 CREATE POLICY "Users can delete application_clients" ON application_clients FOR DELETE USING (auth.role() = 'authenticated');
 
+

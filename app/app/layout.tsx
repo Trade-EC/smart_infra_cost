@@ -1,7 +1,7 @@
 import { requireAuth } from '@/lib/auth'
 import Sidebar from '@/components/Sidebar'
 
-export default async function ProtectedLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
@@ -18,4 +18,5 @@ export default async function ProtectedLayout({
     </div>
   )
 }
+
 
