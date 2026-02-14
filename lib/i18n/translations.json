@@ -48,6 +48,7 @@
       "costs": "Costos",
       "transactions": "Transacciones",
       "reports": "Reportes",
+      "users": "Usuarios",
       "logout": "Cerrar Sesión"
     },
     "auth": {
@@ -69,7 +70,16 @@
       "loggingIn": "Iniciando sesión...",
       "registering": "Creando cuenta...",
       "passwordMismatch": "Las contraseñas no coinciden",
-      "passwordTooShort": "La contraseña debe tener al menos 6 caracteres"
+      "passwordTooShort": "La contraseña debe tener al menos 6 caracteres",
+      "changePassword": "Cambiar Contraseña",
+      "changePasswordTitle": "Debes cambiar tu contraseña antes de continuar",
+      "newPassword": "Nueva Contraseña",
+      "confirmNewPassword": "Confirmar Nueva Contraseña",
+      "newPasswordPlaceholder": "Ingresa tu nueva contraseña",
+      "confirmNewPasswordPlaceholder": "Confirma tu nueva contraseña",
+      "passwordMismatch": "Las contraseñas no coinciden",
+      "updating": "Actualizando...",
+      "changePasswordError": "Error al actualizar la contraseña"
     },
     "clients": {
       "title": "Clientes",
@@ -151,6 +161,25 @@
       "title": "Reportes",
       "applicationCosts": "Costos por Aplicación",
       "clientCosts": "Costos por Cliente"
+    },
+    "users": {
+      "title": "Usuarios",
+      "create": "Crear Usuario",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "emailPlaceholder": "correo@ejemplo.com",
+      "passwordPlaceholder": "••••••••",
+      "createdAt": "Fecha de Creación",
+      "emailRequired": "El correo electrónico es obligatorio",
+      "passwordRequired": "La contraseña es obligatoria",
+      "passwordTooShort": "La contraseña debe tener al menos 6 caracteres",
+      "loadError": "Error al cargar usuarios",
+      "createError": "Error al crear el usuario",
+      "deleteError": "Error al eliminar el usuario",
+      "deleteConfirm": "¿Eliminar este usuario? Esta acción no se puede deshacer.",
+      "noUsers": "No hay usuarios registrados",
+      "createSuccess": "Usuario creado exitosamente",
+      "mustChangePassword": "El usuario debe cambiar su contraseña en el primer inicio de sesión"
     },
     "errors": {
       "generic": "Ha ocurrido un error",

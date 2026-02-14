@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import Input from '@/components/ui/Input'
+import PasswordInput from '@/components/ui/PasswordInput'
 import Button from '@/components/ui/Button'
 import ErrorMessage from '@/components/ui/ErrorMessage'
 
@@ -24,12 +24,19 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) throw error
+
+      // Verificar si el usuario debe cambiar su contraseña
+      if (data.user?.user_metadata?.must_change_password) {
+        router.push('/change-password')
+        router.refresh()
+        return
+      }
 
       router.push('/')
       router.refresh()
@@ -66,9 +73,8 @@ export default function LoginPage() {
               placeholder={t('auth.emailPlaceholder')}
             />
 
-            <Input
+            <PasswordInput
               label={t('auth.password')}
-              type="password"
               autoComplete="current-password"
               required
               value={password}
@@ -86,16 +92,6 @@ export default function LoginPage() {
             >
               {loading ? t('auth.loggingIn') : t('auth.login')}
             </Button>
-
-            <div className="text-center text-sm">
-              <span className="text-gray-600">{t('auth.noAccount')} </span>
-              <Link
-                href="/register"
-                className="font-medium text-blue-600 hover:text-blue-500"
-              >
-                {t('auth.registerHere')}
-              </Link>
-            </div>
           </div>
         </form>
       </div>
