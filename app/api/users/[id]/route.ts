@@ -11,20 +11,21 @@ function isValidUUID(id: string): boolean {
 // DELETE - Eliminar usuario
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Obtener el ID de los parámetros
-    let id = params?.id
+    // Obtener el ID de los parámetros (Next.js 15+ requiere await)
+    const { id } = await context.params
     
     // Si no viene en params, intentar obtenerlo de la URL
-    if (!id) {
+    let userId = id
+    if (!userId) {
       const url = new URL(request.url)
       const pathParts = url.pathname.split('/')
-      id = pathParts[pathParts.length - 1]
+      userId = pathParts[pathParts.length - 1]
     }
     
-    if (!id || typeof id !== 'string') {
+    if (!userId || typeof userId !== 'string') {
       return NextResponse.json(
         { error: 'ID de usuario inválido o no proporcionado' },
         { status: 400 }
@@ -32,7 +33,7 @@ export async function DELETE(
     }
 
     // Limpiar y decodificar el ID
-    const cleanedId = id.trim()
+    const cleanedId = userId.trim()
     const decodedId = decodeURIComponent(cleanedId)
 
     // Validar que sea un UUID válido
@@ -48,16 +49,21 @@ export async function DELETE(
     const { error } = await adminClient.auth.admin.deleteUser(decodedId)
 
     if (error) {
+      console.error('Error al eliminar usuario de Supabase:', error)
       return NextResponse.json(
-        { error: error.message },
+        { error: error.message || 'Error al eliminar usuario' },
         { status: 500 }
       )
     }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
+    console.error('Error en DELETE /api/users/[id]:', error)
     return NextResponse.json(
-      { error: 'Error al eliminar usuario: ' + error.message },
+      { 
+        error: error.message || 'Error al eliminar usuario',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
