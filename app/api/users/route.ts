@@ -9,8 +9,9 @@ export async function GET() {
     const { data: { users }, error } = await adminClient.auth.admin.listUsers()
 
     if (error) {
+      console.error('Error al listar usuarios:', error)
       return NextResponse.json(
-        { error: error.message },
+        { error: error.message || 'Error al listar usuarios' },
         { status: 500 }
       )
     }
@@ -26,8 +27,12 @@ export async function GET() {
 
     return NextResponse.json(usersList)
   } catch (error: any) {
+    console.error('Error en GET /api/users:', error)
     return NextResponse.json(
-      { error: 'Error al listar usuarios: ' + error.message },
+      { 
+        error: error.message || 'Error al listar usuarios',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
@@ -78,8 +83,12 @@ export async function POST(request: NextRequest) {
       created_at: data.user.created_at,
     })
   } catch (error: any) {
+    console.error('Error en POST /api/users:', error)
     return NextResponse.json(
-      { error: 'Error al crear usuario: ' + error.message },
+      { 
+        error: error.message || 'Error al crear usuario',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
