@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+'use client'
+
+import React, { useState, useId } from 'react'
 
 interface PasswordInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string
@@ -15,7 +17,8 @@ export default function PasswordInput({
   ...props
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false)
-  const inputId = id || `password-input-${Math.random().toString(36).substr(2, 9)}`
+  const generatedId = useId()
+  const inputId = id || generatedId
 
   return (
     <div className="w-full">

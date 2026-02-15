@@ -92,6 +92,12 @@ export default function LoginPage() {
             >
               {loading ? t('auth.loggingIn') : t('auth.login')}
             </Button>
+
+            <div className="text-center text-sm">
+              <span className="text-gray-600">
+                ¿Olvidaste tu contraseña? Contacta al administrador.
+              </span>
+            </div>
           </div>
         </form>
       </div>

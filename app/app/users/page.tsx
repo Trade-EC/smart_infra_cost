@@ -103,10 +103,20 @@ export default function UsersPage() {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm(t('users.deleteConfirm'))) return
+    
+    // Validar que el ID sea válido antes de hacer la petición
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      setError('ID de usuario inválido')
+      return
+    }
+
     try {
       setSaving(true)
       setError(null)
-      const response = await fetch(`/api/users/${id}`, {
+      
+      // Codificar el ID para la URL
+      const encodedId = encodeURIComponent(id.trim())
+      const response = await fetch(`/api/users/${encodedId}`, {
         method: 'DELETE',
       })
 
