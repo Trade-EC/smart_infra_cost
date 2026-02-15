@@ -1,5 +1,6 @@
 export { default as Button } from './Button'
 export { default as Input } from './Input'
+export { default as PasswordInput } from './PasswordInput'
 export { default as Label } from './Label'
 export { default as ErrorMessage } from './ErrorMessage'
 export { default as LoadingSpinner } from './LoadingSpinner'

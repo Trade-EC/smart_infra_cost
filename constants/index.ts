@@ -6,6 +6,7 @@ export const NAVIGATION_ITEMS = [
   { key: 'costs', href: '/app/costs', icon: '💰' },
   { key: 'transactions', href: '/app/transactions', icon: '💳' },
   { key: 'reports', href: '/app/reports', icon: '📈' },
+  { key: 'users', href: '/app/users', icon: '👤' },
 ] as const
 
 // Routes
@@ -19,6 +20,7 @@ export const ROUTES = {
   COSTS: '/app/costs',
   TRANSACTIONS: '/app/transactions',
   REPORTS: '/app/reports',
+  USERS: '/app/users',
 } as const
 
 // CSV Configuration
