@@ -17,6 +17,7 @@ import {
   ErrorMessage,
   Table,
 } from '@/components/ui'
+import DateRangePicker from '@/components/ui/DateRangePicker'
 
 export default function ApplicationsPage() {
   const { t } = useTranslation()
@@ -28,13 +29,11 @@ export default function ApplicationsPage() {
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
   const [applications, setApplications] = useState<Application[]>([])
   const [clients, setClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [clientFilter, setClientFilter] = useState('')
   const [applicationFilter, setApplicationFilter] = useState('')
-  const [monthFilter, setMonthFilter] = useState('')
   const [uploading, setUploading] = useState(false)
   const [editingApp, setEditingApp] = useState<string | null>(null)
   const [clientSelectors, setClientSelectors] = useState<
@@ -42,27 +41,19 @@ export default function ApplicationsPage() {
   >({})
 
   useEffect(() => {
-    loadApplications()
     loadClients()
-  }, [dateFrom, dateTo, clientFilter, applicationFilter])
+  }, [])
 
   useEffect(() => {
-    if (!monthFilter) {
-      const now = new Date()
-      const yyyy = now.getFullYear()
-      const mm = String(now.getMonth() + 1).padStart(2, '0')
-      setMonthFilter(`${yyyy}-${mm}`)
-      return
+    // Solo cargar aplicaciones si hay un rango de fechas seleccionado
+    if (dateRange?.start && dateRange?.end) {
+      loadApplications()
+    } else {
+      // Si no hay rango de fechas, limpiar los datos
+      setApplications([])
+      setLoading(false)
     }
-    const [year, month] = monthFilter.split('-').map(Number)
-    if (year && month) {
-      const start = `${year}-${String(month).padStart(2, '0')}-01`
-      const endDate = new Date(year, month, 0)
-      const end = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
-      setDateFrom(start)
-      setDateTo(end)
-    }
-  }, [monthFilter])
+  }, [dateRange, clientFilter, applicationFilter])
 
   const loadClients = async () => {
     try {
@@ -78,8 +69,8 @@ export default function ApplicationsPage() {
       setLoading(true)
       setError(null)
       const data = await applicationsRepo.getAll({
-        dateFrom,
-        dateTo,
+        dateFrom: dateRange?.start || undefined,
+        dateTo: dateRange?.end || undefined,
         clientFilter,
         applicationFilter,
       })
@@ -442,9 +433,10 @@ export default function ApplicationsPage() {
               )}
             </div>
             <Button
+            variant="ghost"
               size="sm"
               onClick={() => startEditing(app.id)}
-              variant="primary"
+              className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
             >
               {app.clients && app.clients.length > 0
                 ? t('common.edit')
@@ -474,39 +466,31 @@ export default function ApplicationsPage() {
       <PageHeader title={t('applications.title')} />
 
       <Card title={t('common.filter')} className="mb-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-          <Input
-            label={t('applications.filters.month')}
-            type="month"
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-          />
-          <Input
-            label={t('applications.filters.dateFrom')}
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-          <Input
-            label={t('applications.filters.dateTo')}
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
-          <Input
-            label={t('applications.filters.application')}
-            type="text"
-            value={applicationFilter}
-            onChange={(e) => setApplicationFilter(e.target.value)}
-            placeholder={t('common.search')}
-          />
-          <Input
-            label={t('applications.filters.client')}
-            type="text"
-            value={clientFilter}
-            onChange={(e) => setClientFilter(e.target.value)}
-            placeholder={t('common.search')}
-          />
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rango de Fechas
+            </label>
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <Input
+              label={t('applications.filters.application')}
+              type="text"
+              value={applicationFilter}
+              onChange={(e) => setApplicationFilter(e.target.value)}
+              placeholder={t('common.search')}
+            />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <Input
+              label={t('applications.filters.client')}
+              type="text"
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              placeholder={t('common.search')}
+            />
+          </div>
         </div>
       </Card>
 
@@ -531,13 +515,26 @@ export default function ApplicationsPage() {
 
       <ErrorMessage message={error || ''} className="mb-4" />
 
-      <Table
-        columns={columns}
-        data={applications}
-        loading={loading}
-        emptyMessage={t('applications.noApplications')}
-        keyExtractor={(app) => app.id}
-      />
+      {!dateRange ? (
+        <Card className="mb-6">
+          <div className="text-center py-12">
+            <p className="text-gray-600 text-lg mb-2">
+              Selecciona un rango de fechas para ver las aplicaciones
+            </p>
+            <p className="text-gray-500 text-sm">
+              Usa el selector de fechas arriba para filtrar los resultados
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <Table
+          columns={columns}
+          data={applications}
+          loading={loading}
+          emptyMessage={t('applications.noApplications')}
+          keyExtractor={(app) => app.id}
+        />
+      )}
     </div>
   )
 }

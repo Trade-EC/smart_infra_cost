@@ -1,9 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
+import { isOwner } from '@/lib/roles'
+
+// Verificar que el usuario sea Owner
+async function requireOwnerInAPI() {
+  try {
+    const supabase = await createClient()
+    
+    // Primero verificar si hay una sesión válida
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    // Si no hay sesión o hay error, no intentar obtener el usuario
+    if (sessionError || !session) {
+      throw new Error('No autenticado: Sesión no válida')
+    }
+    
+    // Si hay sesión, obtener el usuario
+    const { data: { user }, error } = await supabase.auth.getUser()
+    
+    // Si hay error de autenticación (como refresh token inválido), retornar error 401
+    if (error) {
+      // Si es un error de refresh token, mensaje más claro
+      if (error.message?.includes('refresh') || error.message?.includes('token')) {
+        throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.')
+      }
+      throw new Error('No autenticado: ' + error.message)
+    }
+    
+    if (!user) {
+      throw new Error('No autenticado')
+    }
+    
+    if (!isOwner(user)) {
+      throw new Error('No autorizado: Solo los Owners pueden acceder a esta funcionalidad')
+    }
+    
+    return user
+  } catch (error: any) {
+    // Si es un error de refresh token, lanzar un error más claro
+    if (error?.message?.includes('refresh') || error?.message?.includes('token') || error?.message?.includes('Sesión expirada')) {
+      throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.')
+    }
+    throw error
+  }
+}
 
 // GET - Listar usuarios
 export async function GET() {
   try {
+    // Verificar que el usuario sea Owner
+    await requireOwnerInAPI()
+    
     const adminClient = createAdminClient()
     
     const { data: { users }, error } = await adminClient.auth.admin.listUsers()
@@ -23,11 +71,29 @@ export async function GET() {
       created_at: user.created_at,
       email_confirmed_at: user.email_confirmed_at,
       last_sign_in_at: user.last_sign_in_at,
+      role: user.user_metadata?.role || 'admin', // Incluir el rol
     }))
 
     return NextResponse.json(usersList)
   } catch (error: any) {
     console.error('Error en GET /api/users:', error)
+    
+    // Si es un error de autenticación, retornar 401
+    if (error.message?.includes('No autenticado') || error.message?.includes('Sesión expirada')) {
+      return NextResponse.json(
+        { error: error.message || 'No autenticado' },
+        { status: 401 }
+      )
+    }
+    
+    // Si es un error de autorización, retornar 403
+    if (error.message?.includes('No autorizado')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      )
+    }
+    
     return NextResponse.json(
       { 
         error: error.message || 'Error al listar usuarios',
@@ -41,8 +107,11 @@ export async function GET() {
 // POST - Crear usuario
 export async function POST(request: NextRequest) {
   try {
+    // Verificar que el usuario sea Owner
+    await requireOwnerInAPI()
+    
     const body = await request.json()
-    const { email, password } = body
+    const { email, password, role } = body
 
     if (!email || !password) {
       return NextResponse.json(
@@ -51,12 +120,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       return NextResponse.json(
-        { error: 'La contraseña debe tener al menos 6 caracteres' },
+        { error: 'La contraseña debe tener al menos 8 caracteres' },
         { status: 400 }
       )
     }
+
+    // Validar el rol
+    const userRole = role === 'owner' ? 'owner' : 'admin'
 
     const adminClient = createAdminClient()
 
@@ -66,6 +138,7 @@ export async function POST(request: NextRequest) {
       password,
       email_confirm: true, // Confirmar el email automáticamente
       user_metadata: {
+        role: userRole,
         must_change_password: true, // Marcar que debe cambiar la contraseña
       },
     })
@@ -84,6 +157,23 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Error en POST /api/users:', error)
+    
+    // Si es un error de autenticación, retornar 401
+    if (error.message?.includes('No autenticado') || error.message?.includes('Sesión expirada')) {
+      return NextResponse.json(
+        { error: error.message || 'No autenticado' },
+        { status: 401 }
+      )
+    }
+    
+    // Si es un error de autorización, retornar 403
+    if (error.message?.includes('No autorizado')) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      )
+    }
+    
     return NextResponse.json(
       { 
         error: error.message || 'Error al crear usuario',

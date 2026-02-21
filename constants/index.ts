@@ -46,5 +46,5 @@ export const DATE_FORMATS = {
 
 // Validation
 export const VALIDATION = {
-  MIN_PASSWORD_LENGTH: 6,
+  MIN_PASSWORD_LENGTH: 8,
 } as const

@@ -2,18 +2,18 @@
 export interface Client {
   id: string
   name: string
-  email: string | null
+  notes: string | null
   created_at: string
 }
 
 export interface CreateClientData {
   name: string
-  email?: string | null
+  notes?: string | null
 }
 
 export interface UpdateClientData {
   name?: string
-  email?: string | null
+  notes?: string | null
 }
 
 // Application types
@@ -153,5 +153,5 @@ export interface SupabaseApplicationClientRelation {
 
 export interface SupabaseUpdateData {
   name?: string
-  email?: string | null
+  notes?: string | null
 }
