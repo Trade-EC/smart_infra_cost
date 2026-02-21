@@ -90,6 +90,7 @@ export const translations = {
       nameRequired: 'El nombre es obligatorio',
       loadError: 'Error al cargar clientes',
       saveError: 'Error al guardar el cliente',
+      updateSuccess: 'Cliente actualizado exitosamente',
       deleteError: 'Error al eliminar el cliente',
       deleteConfirm: '¿Eliminar este cliente? Esta acción no se puede deshacer.',
       noClients: 'No hay clientes registrados',
