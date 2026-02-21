@@ -3,13 +3,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { isOwner } from '@/lib/roles'
 
-// Validar formato UUID
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isValidUUID(id: string): boolean {
-  return UUID_REGEX.test(id)
-}
-
 // Verificar que el usuario sea Owner
 async function requireOwnerInAPI() {
   try {
@@ -53,8 +46,15 @@ async function requireOwnerInAPI() {
   }
 }
 
-// DELETE - Eliminar usuario
-export async function DELETE(
+// Validar formato UUID
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isValidUUID(id: string): boolean {
+  return UUID_REGEX.test(id)
+}
+
+// PATCH - Actualizar contraseña de usuario
+export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -62,18 +62,10 @@ export async function DELETE(
     // Verificar que el usuario sea Owner
     await requireOwnerInAPI()
     
-    // Obtener el ID de los parámetros (Next.js 15+ requiere await)
+    // Obtener el ID de los parámetros
     const { id } = await context.params
     
-    // Si no viene en params, intentar obtenerlo de la URL
-    let userId = id
-    if (!userId) {
-      const url = new URL(request.url)
-      const pathParts = url.pathname.split('/')
-      userId = pathParts[pathParts.length - 1]
-    }
-    
-    if (!userId || typeof userId !== 'string') {
+    if (!id || typeof id !== 'string') {
       return NextResponse.json(
         { error: 'ID de usuario inválido o no proporcionado' },
         { status: 400 }
@@ -81,7 +73,7 @@ export async function DELETE(
     }
 
     // Limpiar y decodificar el ID
-    const cleanedId = userId.trim()
+    const cleanedId = id.trim()
     const decodedId = decodeURIComponent(cleanedId)
 
     // Validar que sea un UUID válido
@@ -92,21 +84,62 @@ export async function DELETE(
       )
     }
 
+    // Obtener la nueva contraseña del body
+    const body = await request.json()
+    const { password } = body
+
+    if (!password || typeof password !== 'string') {
+      return NextResponse.json(
+        { error: 'La contraseña es requerida' },
+        { status: 400 }
+      )
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'La contraseña debe tener al menos 8 caracteres' },
+        { status: 400 }
+      )
+    }
+
     const adminClient = createAdminClient()
 
-    const { error } = await adminClient.auth.admin.deleteUser(decodedId)
+    // Obtener el usuario actual para preservar otros metadatos
+    const { data: { user: currentUser }, error: getUserError } = await adminClient.auth.admin.getUserById(decodedId)
+
+    if (getUserError || !currentUser) {
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Actualizar la contraseña y marcar que debe cambiarla en el próximo login
+    const updatedMetadata = {
+      ...currentUser.user_metadata,
+      must_change_password: true, // Forzar cambio de contraseña en el próximo login
+    }
+
+    const { data, error } = await adminClient.auth.admin.updateUserById(decodedId, {
+      password: password,
+      user_metadata: updatedMetadata,
+    })
 
     if (error) {
-      console.error('Error al eliminar usuario de Supabase:', error)
+      console.error('Error al actualizar contraseña de usuario:', error)
       return NextResponse.json(
-        { error: error.message || 'Error al eliminar usuario' },
+        { error: error.message || 'Error al actualizar la contraseña' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      id: data.user.id,
+      email: data.user.email,
+      message: 'Contraseña actualizada exitosamente. El usuario deberá cambiarla en el próximo inicio de sesión.',
+    })
   } catch (error: any) {
-    console.error('Error en DELETE /api/users/[id]:', error)
+    console.error('Error en PATCH /api/users/[id]/password:', error)
     
     // Si es un error de autenticación, retornar 401
     if (error.message?.includes('No autenticado') || error.message?.includes('Sesión expirada')) {
@@ -126,7 +159,7 @@ export async function DELETE(
     
     return NextResponse.json(
       { 
-        error: error.message || 'Error al eliminar usuario',
+        error: error.message || 'Error al actualizar la contraseña',
         details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       },
       { status: 500 }

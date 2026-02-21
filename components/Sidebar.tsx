@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -8,18 +9,50 @@ import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { TranslationKey } from '@/lib/i18n/useTranslation'
 import { NAVIGATION_ITEMS } from '@/constants'
 import type { NavItem } from '@/types'
+import { isOwner } from '@/lib/roles'
 
 export default function Sidebar() {
   const { t } = useTranslation()
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    checkUserRole()
+  }, [])
+
+  const checkUserRole = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.user_metadata?.role) {
+        setUserRole(user.user_metadata.role)
+      } else {
+        setUserRole('admin') // Por defecto es admin si no tiene rol
+      }
+    } catch (error) {
+      console.error('Error al obtener rol del usuario:', error)
+      setUserRole('admin')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
   }
+
+  // Filtrar items de navegación basándose en el rol
+  const filteredItems = NAVIGATION_ITEMS.filter((item: NavItem) => {
+    // Solo mostrar "usuarios" si el usuario es Owner
+    if (item.key === 'users') {
+      return isOwner({ user_metadata: { role: userRole } })
+    }
+    return true
+  })
 
   return (
     <div className="flex h-screen w-64 flex-col bg-gray-900 text-white">
@@ -30,7 +63,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-3 py-4">
-        {NAVIGATION_ITEMS.map((item: NavItem) => {
+        {!loading && filteredItems.map((item: NavItem) => {
           const isActive = pathname === item.href
           return (
             <Link

@@ -38,7 +38,7 @@ export class ClientsRepository {
       .from('clients')
       .insert({
         name: clientData.name.trim(),
-        email: clientData.email?.trim() || null,
+        notes: clientData.notes?.trim() || null,
       })
       .select()
       .single()
@@ -52,8 +52,8 @@ export class ClientsRepository {
     if (clientData.name !== undefined) {
       updateData.name = clientData.name.trim()
     }
-    if (clientData.email !== undefined) {
-      updateData.email = clientData.email?.trim() || null
+    if (clientData.notes !== undefined) {
+      updateData.notes = clientData.notes?.trim() || null
     }
 
     const { data, error } = await this.supabase
