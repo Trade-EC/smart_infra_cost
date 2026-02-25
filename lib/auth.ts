@@ -70,7 +70,7 @@ export async function requireAuth() {
 export async function requireOwner() {
   const user = await requireAuth()
   if (!isOwner(user)) {
-    redirect('/app/dashboard')
+    redirect('/app/reports')
   }
   return user
 }

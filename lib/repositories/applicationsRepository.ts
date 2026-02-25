@@ -201,4 +201,45 @@ export class ApplicationsRepository {
 
     if (error) throw error
   }
+
+  async getByClientAndDateRange(
+    clientId: string,
+    dateFrom: string,
+    dateTo: string
+  ): Promise<Application[]> {
+    // Primero obtener las aplicaciones asignadas al cliente
+    const { data: assignments, error: assignError } = await this.supabase
+      .from('application_clients')
+      .select('application_id')
+      .eq('client_id', clientId)
+
+    if (assignError) throw assignError
+
+    if (!assignments || assignments.length === 0) {
+      return []
+    }
+
+    const applicationIds = assignments.map(a => a.application_id)
+
+    // Luego obtener las aplicaciones en el rango de fechas
+    const { data: applications, error: appError } = await this.supabase
+      .from('applications')
+      .select('*')
+      .in('id', applicationIds)
+      .gte('date', dateFrom)
+      .lte('date', dateTo)
+      .order('date', { ascending: false })
+
+    if (appError) throw appError
+
+    // Transform the data
+    return (applications || []).map((app: any): Application => ({
+      id: app.id,
+      name: app.name,
+      responsable: app.responsable,
+      price: app.price,
+      date: app.date,
+      clients: [], // No necesitamos los clientes aquí
+    }))
+  }
 }

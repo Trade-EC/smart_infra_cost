@@ -83,8 +83,8 @@ export default function ChangePasswordPage() {
 
       if (metadataError) throw metadataError
 
-      // Redirigir al dashboard
-      router.push('/')
+      // Redirigir a la aplicación
+      router.push('/app/reports')
       router.refresh()
     } catch (error: any) {
       setError(error.message || 'Error al actualizar la contraseña')

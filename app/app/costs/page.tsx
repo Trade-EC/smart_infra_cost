@@ -1,26 +1,23 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase/client'
 import {
   ApplicationsRepository,
   ClientsRepository,
-  MonthlyCostsRepository,
+  TransactionsRepository,
 } from '@/lib/repositories'
 import { useTranslation } from '@/lib/i18n/useTranslation'
-import type { Application, Client } from '@/types'
+import type { Application, Client, Transaction } from '@/types'
 import {
   PageHeader,
-  Card,
   Input,
-  Button,
   ErrorMessage,
+  DateRangePicker,
 } from '@/components/ui'
 
-interface SelectedClient {
-  clientId: string
-  clientName: string
+interface TransactionWithCost extends Transaction {
+  assigned_cost: number
 }
 
 export default function CostsPage() {
@@ -28,29 +25,28 @@ export default function CostsPage() {
   const supabase = useMemo(() => createClient(), [])
   const applicationsRepo = useMemo(() => new ApplicationsRepository(supabase), [supabase])
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
-  const monthlyCostsRepo = useMemo(() => new MonthlyCostsRepository(supabase), [supabase])
+  const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
   
-  const [month, setMonth] = useState('')
-  const [applications, setApplications] = useState<Application[]>([])
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [clients, setClients] = useState<Client[]>([])
-  const [selectedApplications, setSelectedApplications] = useState<Set<string>>(new Set())
-  const [allocations, setAllocations] = useState<Record<string, SelectedClient[]>>({})
+  const [transactions, setTransactions] = useState<TransactionWithCost[]>([])
+  const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadApplications()
     loadClients()
   }, [])
 
-  const loadApplications = async () => {
-    try {
-      const data = await applicationsRepo.getAll()
-      setApplications(data)
-    } catch (err: any) {
-      setError(err.message || t('costs.loadError'))
+  useEffect(() => {
+    if (dateRange && selectedClientId) {
+      loadCosts()
+    } else {
+      setTransactions([])
+      setApplications([])
     }
-  }
+  }, [dateRange, selectedClientId])
 
   const loadClients = async () => {
     try {
@@ -61,118 +57,59 @@ export default function CostsPage() {
     }
   }
 
-  const toggleApplication = (appId: string) => {
-    const newSelected = new Set(selectedApplications)
-    if (newSelected.has(appId)) {
-      newSelected.delete(appId)
-      const newAllocations = { ...allocations }
-      delete newAllocations[appId]
-      setAllocations(newAllocations)
-    } else {
-      newSelected.add(appId)
-    }
-    setSelectedApplications(newSelected)
-  }
-
-  const addClientToAllocation = (appId: string) => {
-    if (clients.length === 0) {
-      setError(t('costs.noClients'))
-      return
-    }
-
-    const current = allocations[appId] || []
-    const availableClients = clients.filter(
-      (c) => !current.some((a) => a.clientId === c.id)
-    )
-
-    if (availableClients.length === 0) {
-      setError(t('costs.allClientsAssigned'))
-      return
-    }
-
-    const newClient = availableClients[0]
-    setAllocations({
-      ...allocations,
-      [appId]: [...current, { clientId: newClient.id, clientName: newClient.name }],
-    })
-    setError(null)
-  }
-
-  const removeClientFromAllocation = (appId: string, clientId: string) => {
-    const current = allocations[appId] || []
-    setAllocations({
-      ...allocations,
-      [appId]: current.filter((c) => c.clientId !== clientId),
-    })
-  }
-
-  const calculateDistribution = (appId: string) => {
-    const app = applications.find((a) => a.id === appId)
-    const selectedClients = allocations[appId] || []
-
-    if (!app || selectedClients.length === 0) return null
-
-    const amountPerClient = app.price / selectedClients.length
-    return { amountPerClient, total: app.price }
-  }
-
-  const handleCreateMonth = async () => {
-    setError(null)
-
-    if (!month) {
-      setError(t('costs.selectMonth'))
-      return
-    }
-
-    if (selectedApplications.size === 0) {
-      setError(t('costs.selectApplication'))
-      return
-    }
-
-    // Validar que todas las aplicaciones tengan clientes asignados
-    for (const appId of selectedApplications) {
-      if (!allocations[appId] || allocations[appId].length === 0) {
-        const appName = applications.find((a) => a.id === appId)?.name || ''
-        setError(t('costs.assignClient', { name: appName }))
-        return
-      }
-    }
+  const loadCosts = async () => {
+    if (!dateRange || !selectedClientId) return
 
     setLoading(true)
+    setError(null)
 
     try {
-      const monthDate = new Date(month + '-01')
-      const totalAmount = Array.from(selectedApplications).reduce((sum, appId) => {
-        const app = applications.find((a) => a.id === appId)
-        return sum + (app?.price || 0)
-      }, 0)
+      // Cargar transacciones
+      const transactionsData = await transactionsRepo.getByClientAndDateRange(
+        selectedClientId,
+        dateRange.start,
+        dateRange.end
+      )
+      setTransactions(transactionsData)
 
-      const allocationsData = Array.from(selectedApplications).map((appId) => {
-        const app = applications.find((a) => a.id === appId)
-        const selectedClients = allocations[appId] || []
-        return {
-          applicationId: appId,
-          applicationPrice: app?.price || 0,
-          clientIds: selectedClients.map((c) => c.clientId),
-        }
-      })
-
-      await monthlyCostsRepo.create({
-        month: monthDate.toISOString().split('T')[0],
-        totalAmount,
-        allocations: allocationsData,
-      })
-
-      toast.success(t('costs.createSuccess'))
-      setMonth('')
-      setSelectedApplications(new Set())
-      setAllocations({})
+      // Cargar aplicaciones
+      const applicationsData = await applicationsRepo.getByClientAndDateRange(
+        selectedClientId,
+        dateRange.start,
+        dateRange.end
+      )
+      setApplications(applicationsData)
     } catch (err: any) {
-      setError(err.message || t('costs.createError'))
+      setError(err.message || 'Error al cargar los costos')
     } finally {
       setLoading(false)
     }
   }
+
+  const formatMonth = (monthStr: string) => {
+    const date = new Date(monthStr)
+    const monthNames = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ]
+    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
+  // Calcular totales
+  const transactionsTotal = transactions.reduce((sum, t) => sum + t.assigned_cost, 0)
+  const applicationsTotal = applications.reduce((sum, a) => sum + a.price, 0)
+  const grandTotal = transactionsTotal + applicationsTotal
+
+  const selectedClient = clients.find(c => c.id === selectedClientId)
 
   return (
     <div>
@@ -180,107 +117,195 @@ export default function CostsPage() {
 
       <ErrorMessage message={error || ''} className="mb-4" />
 
-      <Card title={t('costs.createMonth')} className="mb-6">
-        <div className="mb-4">
-          <Input
-            label={t('common.month')}
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-          />
+      {/* Filtros */}
+      <div className="mb-6 rounded-lg bg-white p-6 shadow">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fechas
+            </label>
+            <DateRangePicker
+              value={dateRange}
+              onChange={setDateRange}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cliente
+            </label>
+            <select
+              value={selectedClientId}
+              onChange={(e) => setSelectedClientId(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            >
+              <option value="">Seleccionar cliente</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <Button
-          onClick={handleCreateMonth}
-          disabled={loading || !month || selectedApplications.size === 0}
-          isLoading={loading}
-        >
-          {loading ? t('common.creating') : t('costs.createMonth')}
-        </Button>
-      </Card>
+      </div>
 
-      <Card title={t('costs.availableApplications')}>
-        <div className="space-y-4">
-          {applications.length === 0 ? (
-            <p className="text-sm text-gray-500">{t('applications.noApplications')}</p>
-          ) : (
-            applications.map((app) => {
-              const isSelected = selectedApplications.has(app.id)
-              const distribution = calculateDistribution(app.id)
-              const selectedClients = allocations[app.id] || []
-
-              return (
-                <div
-                  key={app.id}
-                  className={`rounded-lg border-2 p-4 ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleApplication(app.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div>
-                        <p className="font-semibold">{app.name}</p>
-                        <p className="text-sm text-gray-500">
-                          ${app.price.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                    {isSelected && (
-                      <Button
-                        size="sm"
-                        variant="success"
-                        onClick={() => addClientToAllocation(app.id)}
-                      >
-                        {t('costs.addClient')}
-                      </Button>
-                    )}
-                  </div>
-
-                  {isSelected && (
-                    <div className="mt-4 space-y-2">
-                      {selectedClients.map((client) => (
-                        <div
-                          key={client.clientId}
-                          className="flex items-center justify-between rounded bg-white p-2"
-                        >
-                          <span>{client.clientName}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">
-                              ${distribution
-                                ? distribution.amountPerClient.toFixed(2)
-                                : '0.00'}
-                            </span>
-                            <button
-                              onClick={() =>
-                                removeClientFromAllocation(app.id, client.clientId)
-                              }
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
+      {/* Contenido */}
+      {loading ? (
+        <div className="text-center py-8">
+          <p className="text-gray-600">Cargando...</p>
+        </div>
+      ) : dateRange && selectedClientId ? (
+        <div className="space-y-6">
+          {/* Sección de Transacciones */}
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">
+              Transacciones
+            </h2>
+            {transactions.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay transacciones en el rango seleccionado</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-blue-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Mes
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Cantidad
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Precio por Transacción
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Costo Asignado
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactions.map((transaction) => (
+                        <tr key={transaction.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatMonth(transaction.month)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {transaction.quantity}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            ${transaction.cost_per_transaction.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            ${transaction.assigned_cost.toFixed(2)}
+                          </td>
+                        </tr>
                       ))}
-                      {selectedClients.length === 0 && (
-                        <p className="text-sm text-gray-500">
-                          {t('costs.addClientsToDistribute')}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
+                          Total Transacciones:
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                          ${transactionsTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              )
-            })
-          )}
+              </>
+            )}
+          </div>
+
+          {/* Sección de Aplicaciones */}
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">
+              Aplicaciones
+            </h2>
+            {applications.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay aplicaciones en el rango seleccionado</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-blue-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Fecha
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Aplicación
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Responsable
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Costo
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {applications.map((application) => (
+                        <tr key={application.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatDate(application.date)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {application.name}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {application.responsable}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            ${application.price.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
+                          Total Aplicaciones:
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                          ${applicationsTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Total General */}
+          <div className="rounded-lg bg-blue-50 border-2 border-blue-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">
+                  Cliente: <span className="font-bold">{selectedClient?.name || ''}</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Período: {dateRange ? `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}` : ''}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-700 mb-1">Total General</p>
+                <p className="text-3xl font-bold text-blue-600">
+                  ${grandTotal.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
-      </Card>
+      ) : (
+        <div className="rounded-lg bg-white p-6 shadow text-center">
+          <p className="text-gray-500">
+            Por favor selecciona un rango de fechas y un cliente para ver el desglose de costos
+          </p>
+        </div>
+      )}
     </div>
   )
 }
