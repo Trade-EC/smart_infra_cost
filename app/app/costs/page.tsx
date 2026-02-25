@@ -6,7 +6,9 @@ import {
   ApplicationsRepository,
   ClientsRepository,
   TransactionsRepository,
+  AWSReportsRepository,
 } from '@/lib/repositories'
+import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client, Transaction } from '@/types'
 import {
@@ -26,12 +28,14 @@ export default function CostsPage() {
   const applicationsRepo = useMemo(() => new ApplicationsRepository(supabase), [supabase])
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
   const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
+  const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
   
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [clients, setClients] = useState<Client[]>([])
   const [transactions, setTransactions] = useState<TransactionWithCost[]>([])
   const [applications, setApplications] = useState<Application[]>([])
+  const [awsReports, setAwsReports] = useState<AWSReport[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,6 +49,7 @@ export default function CostsPage() {
     } else {
       setTransactions([])
       setApplications([])
+      setAwsReports([])
     }
   }, [dateRange, selectedClientId])
 
@@ -79,6 +84,14 @@ export default function CostsPage() {
         dateRange.end
       )
       setApplications(applicationsData)
+
+      // Cargar reportes AWS
+      const awsReportsData = await awsReportsRepo.getByClientAndDateRange(
+        selectedClientId,
+        dateRange.start,
+        dateRange.end
+      )
+      setAwsReports(awsReportsData)
     } catch (err: any) {
       setError(err.message || 'Error al cargar los costos')
     } finally {
@@ -107,7 +120,8 @@ export default function CostsPage() {
   // Calcular totales
   const transactionsTotal = transactions.reduce((sum, t) => sum + t.assigned_cost, 0)
   const applicationsTotal = applications.reduce((sum, a) => sum + a.price, 0)
-  const grandTotal = transactionsTotal + applicationsTotal
+  const awsTotal = awsReports.reduce((sum, a) => sum + a.seller_cost, 0)
+  const grandTotal = transactionsTotal + applicationsTotal + awsTotal
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
 
@@ -270,6 +284,67 @@ export default function CostsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
                           ${applicationsTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Sección de AWS */}
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">
+              AWS
+            </h2>
+            {awsReports.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay costos de AWS en el rango seleccionado</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-blue-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Fecha
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Cuenta Cloud
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Cliente (CSV)
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Costo
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {awsReports.map((report) => (
+                        <tr key={report.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatDate(report.date)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.cloud_account_number}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.customer_name}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            ${report.seller_cost.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
+                          Total AWS:
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                          ${awsTotal.toFixed(2)}
                         </td>
                       </tr>
                     </tfoot>

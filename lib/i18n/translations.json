@@ -47,6 +47,7 @@
       "costs": "Costos",
       "transactions": "Transacciones",
       "reports": "Reportes",
+      "aws": "AWS",
       "users": "Usuarios",
       "logout": "Cerrar Sesión"
     },
@@ -161,6 +162,21 @@
       "title": "Reportes",
       "applicationCosts": "Costos por Aplicación",
       "clientCosts": "Costos por Cliente"
+    },
+    "aws": {
+      "title": "AWS",
+      "uploadCSV": "Subir CSV",
+      "uploadCSVTitle": "Cargar Reporte AWS",
+      "selectFile": "Seleccionar archivo CSV",
+      "uploading": "Procesando CSV...",
+      "customerName": "Nombre del Cliente",
+      "cloudAccountNumber": "Número de Cuenta Cloud",
+      "sellerCost": "Costo del Vendedor (USD)",
+      "totalCost": "Costo Total",
+      "uploadError": "Error al procesar el CSV",
+      "csvUploaded": "CSV procesado exitosamente",
+      "noData": "No hay datos para mostrar",
+      "csvFormat": "El CSV debe tener las columnas: Customer Name, Cloud Account Number, Seller Cost (USD)"
     },
     "users": {
       "title": "Usuarios",
