@@ -388,9 +388,10 @@ export default function ApplicationsPage() {
                 </button>
                 <div className="flex-1"></div>
                 <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => handleSaveClients(app.id)}
-                  variant="primary"
+                  className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-green-700 hover:bg-green-100 hover:border-green-300"
                 >
                   {t('common.save')}
                 </Button>
@@ -403,7 +404,8 @@ export default function ApplicationsPage() {
                       [app.id]: [''],
                     })
                   }}
-                  variant="secondary"
+                  variant="ghost"
+                  className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-gray-700 hover:bg-gray-100 hover:border-gray-300"
                 >
                   {t('common.cancel')}
                 </Button>

@@ -48,20 +48,53 @@ export class TransactionsRepository {
 
     if (transError) throw transError
 
-    // Create assignments
-    const costPerClient = total / data.clientIds.length
-    const assignments = data.clientIds.map((clientId) => ({
-      transaction_id: transaction.id,
-      client_id: clientId,
-      assigned_cost: costPerClient,
-    }))
+    // Create assignments only if clientIds are provided
+    if (data.clientIds && data.clientIds.length > 0) {
+      const costPerClient = total / data.clientIds.length
+      const assignments = data.clientIds.map((clientId) => ({
+        transaction_id: transaction.id,
+        client_id: clientId,
+        assigned_cost: costPerClient,
+      }))
 
-    const { error: assignError } = await this.supabase
-      .from('transaction_assignments')
-      .insert(assignments)
+      const { error: assignError } = await this.supabase
+        .from('transaction_assignments')
+        .insert(assignments)
 
-    if (assignError) throw assignError
+      if (assignError) throw assignError
+    }
 
+    return transaction
+  }
+
+  async update(id: string, data: Partial<CreateTransactionData>): Promise<Transaction> {
+    const updateData: any = {}
+    
+    if (data.month) updateData.month = data.month
+    if (data.quantity !== undefined) updateData.quantity = data.quantity
+    if (data.costPerTransaction !== undefined) {
+      updateData.cost_per_transaction = data.costPerTransaction
+    }
+    if (data.description !== undefined) updateData.description = data.description || null
+    
+    // Recalcular total si quantity o costPerTransaction cambian
+    if (data.quantity !== undefined || data.costPerTransaction !== undefined) {
+      const current = await this.getById(id)
+      if (current) {
+        const qty = data.quantity !== undefined ? data.quantity : current.quantity
+        const cost = data.costPerTransaction !== undefined ? data.costPerTransaction : current.cost_per_transaction
+        updateData.total_cost = qty * cost
+      }
+    }
+
+    const { data: transaction, error } = await this.supabase
+      .from('transactions')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
     return transaction
   }
 
@@ -72,5 +105,44 @@ export class TransactionsRepository {
       .eq('id', id)
 
     if (error) throw error
+  }
+
+  async getByClientAndDateRange(
+    clientId: string,
+    dateFrom: string,
+    dateTo: string
+  ): Promise<Array<Transaction & { assigned_cost: number }>> {
+    // Primero obtener las asignaciones del cliente
+    const { data: assignments, error: assignError } = await this.supabase
+      .from('transaction_assignments')
+      .select('transaction_id, assigned_cost')
+      .eq('client_id', clientId)
+
+    if (assignError) throw assignError
+
+    if (!assignments || assignments.length === 0) {
+      return []
+    }
+
+    const transactionIds = assignments.map(a => a.transaction_id)
+
+    // Luego obtener las transacciones en el rango de fechas
+    const { data: transactions, error: transError } = await this.supabase
+      .from('transactions')
+      .select('*')
+      .in('id', transactionIds)
+      .gte('month', dateFrom)
+      .lte('month', dateTo)
+      .order('month', { ascending: false })
+
+    if (transError) throw transError
+
+    // Combinar los datos
+    const assignmentMap = new Map(assignments.map(a => [a.transaction_id, a.assigned_cost]))
+
+    return (transactions || []).map((transaction: any) => ({
+      ...transaction,
+      assigned_cost: assignmentMap.get(transaction.id) || 0,
+    }))
   }
 }

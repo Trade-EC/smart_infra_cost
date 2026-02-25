@@ -47,7 +47,6 @@ export const translations = {
 
     // Navigation
     nav: {
-      dashboard: 'Dashboard',
       clients: 'Clientes',
       applications: 'Aplicaciones',
       costs: 'Costos',

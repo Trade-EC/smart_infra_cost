@@ -1,6 +1,5 @@
 // Navigation items
 export const NAVIGATION_ITEMS = [
-  { key: 'dashboard', href: '/app/dashboard', icon: '📊' },
   { key: 'clients', href: '/app/clients', icon: '👥' },
   { key: 'applications', href: '/app/applications', icon: '📱' },
   { key: 'costs', href: '/app/costs', icon: '💰' },
@@ -14,7 +13,6 @@ export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
   REGISTER: '/register',
-  DASHBOARD: '/app/dashboard',
   CLIENTS: '/app/clients',
   APPLICATIONS: '/app/applications',
   COSTS: '/app/costs',
