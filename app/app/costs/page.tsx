@@ -7,6 +7,7 @@ import {
   ClientsRepository,
   TransactionsRepository,
   AWSReportsRepository,
+  ApplicationCostDistributionsRepository,
 } from '@/lib/repositories'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
@@ -29,6 +30,7 @@ export default function CostsPage() {
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
   const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
   const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
+  const distributionsRepo = useMemo(() => new ApplicationCostDistributionsRepository(supabase), [supabase])
   
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
@@ -77,12 +79,47 @@ export default function CostsPage() {
       )
       setTransactions(transactionsData)
 
-      // Cargar aplicaciones
-      const applicationsData = await applicationsRepo.getByClientAndDateRange(
+      // Cargar aplicaciones con distribuciones
+      // Primero obtener todas las aplicaciones en el rango de fechas
+      const allApplications = await applicationsRepo.getAll({
+        dateFrom: dateRange.start,
+        dateTo: dateRange.end,
+      })
+
+      // Obtener distribuciones para el cliente seleccionado
+      const distributions = await distributionsRepo.getByClientAndDateRange(
         selectedClientId,
         dateRange.start,
         dateRange.end
       )
+
+      // Filtrar aplicaciones que tienen el cliente asignado directamente o a través de distribuciones
+      const applicationsWithClient = allApplications.filter((app) => {
+        // Verificar si tiene el cliente asignado directamente
+        const hasDirectClient = app.clients?.some((c) => c.id === selectedClientId)
+        
+        // Verificar si tiene distribución para este cliente
+        const hasDistribution = distributions.some((dist) => dist.application_id === app.id)
+        
+        return hasDirectClient || hasDistribution
+      })
+
+      // Mapear aplicaciones con el costo distribuido
+      const applicationsData = applicationsWithClient.map((app) => {
+        const distribution = distributions.find((dist) => dist.application_id === app.id)
+        
+        if (distribution) {
+          // Si tiene distribución, usar el monto distribuido
+          return {
+            ...app,
+            price: distribution.allocated_amount,
+          }
+        }
+        
+        // Si no tiene distribución, usar el precio completo
+        return app
+      })
+
       setApplications(applicationsData)
 
       // Cargar reportes AWS

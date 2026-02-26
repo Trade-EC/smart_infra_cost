@@ -6,7 +6,9 @@ import { createClient } from '@/lib/supabase/client'
 import {
   ApplicationsRepository,
   ClientsRepository,
+  ApplicationCostDistributionsRepository,
 } from '@/lib/repositories'
+import type { ApplicationCostDistribution } from '@/lib/repositories/applicationCostDistributionsRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client } from '@/types'
 import {
@@ -27,18 +29,25 @@ export default function ApplicationsPage() {
     [supabase]
   )
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
+  const distributionsRepo = useMemo(() => new ApplicationCostDistributionsRepository(supabase), [supabase])
   const [applications, setApplications] = useState<Application[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [clientFilter, setClientFilter] = useState('')
+  const [selectedClientFilter, setSelectedClientFilter] = useState<string>('')
   const [applicationFilter, setApplicationFilter] = useState('')
   const [uploading, setUploading] = useState(false)
   const [editingApp, setEditingApp] = useState<string | null>(null)
   const [clientSelectors, setClientSelectors] = useState<
     Record<string, string[]>
   >({})
+  const [distributingApp, setDistributingApp] = useState<Application | null>(null)
+  const [distributionRows, setDistributionRows] = useState<Array<{ clientId: string; percentage: number | '' | string }>>([])
+  const [savingDistribution, setSavingDistribution] = useState(false)
+
+  const TODOS_CLIENT_ID = 'abe57007-076c-492a-84da-0e5d075af2f9'
 
   useEffect(() => {
     loadClients()
@@ -53,7 +62,7 @@ export default function ApplicationsPage() {
       setApplications([])
       setLoading(false)
     }
-  }, [dateRange, clientFilter, applicationFilter])
+  }, [dateRange, clientFilter, selectedClientFilter, applicationFilter])
 
   const loadClients = async () => {
     try {
@@ -74,7 +83,16 @@ export default function ApplicationsPage() {
         clientFilter,
         applicationFilter,
       })
-      setApplications(data)
+      
+      // Filtrar por cliente seleccionado si hay uno
+      let filteredData = data
+      if (selectedClientFilter) {
+        filteredData = data.filter((app) =>
+          app.clients?.some((c) => c.id === selectedClientFilter)
+        )
+      }
+      
+      setApplications(filteredData)
     } catch (err: any) {
       setError(err.message || t('applications.loadError'))
     } finally {
@@ -169,6 +187,103 @@ export default function ApplicationsPage() {
       ...clientSelectors,
       [appId]: updated.length > 0 ? updated : [''],
     })
+  }
+
+  const handleOpenDistributionModal = async (app: Application) => {
+    try {
+      setDistributingApp(app)
+      setError(null)
+      
+      // Cargar distribuciones existentes
+      const existingDistributions = await distributionsRepo.getByApplication(app.id)
+      
+      if (existingDistributions.length > 0) {
+        setDistributionRows(
+          existingDistributions.map((dist) => ({
+            clientId: dist.client_id,
+            percentage: dist.allocation_percentage,
+          }))
+        )
+      } else {
+        // Inicializar con una fila vacía
+        setDistributionRows([{ clientId: '', percentage: '' }])
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar las distribuciones')
+    }
+  }
+
+  const handleAddDistributionRow = () => {
+    setDistributionRows([...distributionRows, { clientId: '', percentage: '' }])
+  }
+
+  const handleRemoveDistributionRow = (index: number) => {
+    setDistributionRows(distributionRows.filter((_, i) => i !== index))
+  }
+
+  const handleUpdateDistributionRow = (index: number, field: 'clientId' | 'percentage', value: string | number | '') => {
+    const updated = [...distributionRows]
+    updated[index] = { ...updated[index], [field]: value }
+    setDistributionRows(updated)
+  }
+
+  const handleSaveDistribution = async () => {
+    if (!distributingApp) return
+
+    // Validar que todos los campos estén completos
+    const incompleteRows = distributionRows.some(
+      (row) => !row.clientId || row.percentage === '' || typeof row.percentage !== 'number' || row.percentage <= 0 || row.percentage > 100
+    )
+    
+    if (incompleteRows) {
+      setError('Todos los clientes deben estar seleccionados y los porcentajes deben ser mayores a 0 y menores o iguales a 100')
+      return
+    }
+
+    // Validar que la suma de porcentajes sea 100
+    const totalPercentage = distributionRows.reduce((sum, row) => sum + (typeof row.percentage === 'number' ? row.percentage : 0), 0)
+    if (Math.abs(totalPercentage - 100) > 0.01) {
+      setError(`La suma de los porcentajes debe ser 100%. Actual: ${totalPercentage.toFixed(2)}%`)
+      return
+    }
+
+    // Validar que no haya clientes duplicados
+    const clientIds = distributionRows.map((row) => row.clientId)
+    const uniqueClientIds = new Set(clientIds)
+    if (clientIds.length !== uniqueClientIds.size) {
+      setError('No puedes asignar el mismo cliente más de una vez')
+      return
+    }
+
+    setSavingDistribution(true)
+    setError(null)
+
+    try {
+      // Eliminar distribuciones existentes
+      await distributionsRepo.deleteByApplication(distributingApp.id)
+
+      // Crear nuevas distribuciones
+      const distributions = distributionRows.map((row) => {
+        const percentage = typeof row.percentage === 'number' ? row.percentage : 0
+        return {
+          applicationId: distributingApp.id,
+          clientId: row.clientId,
+          percentage: percentage,
+          allocatedAmount: (distributingApp.price * percentage) / 100,
+        }
+      })
+
+      await distributionsRepo.createOrUpdateMany(distributions)
+      
+      toast.success('Distribución de costos guardada exitosamente')
+      setDistributingApp(null)
+      setDistributionRows([])
+      await loadApplications()
+    } catch (err: any) {
+      setError(err.message || 'Error al guardar la distribución')
+    } finally {
+      setSavingDistribution(false)
+    }
   }
 
   const convertDate = (dateStr: string): string => {
@@ -414,6 +529,8 @@ export default function ApplicationsPage() {
           )
         }
 
+        const hasTodosClient = app.clients?.some(c => c.id === TODOS_CLIENT_ID)
+
         return (
           <div className="flex items-center gap-2">
             <div className="flex-1">
@@ -434,6 +551,16 @@ export default function ApplicationsPage() {
                 </span>
               )}
             </div>
+            {hasTodosClient && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDistributionModal(app)}
+                className="rounded-full bg-orange-50 border border-orange-200 px-3 py-1 text-orange-700 hover:bg-orange-100 hover:border-orange-300 mr-2"
+              >
+                Distribuir Costo
+              </Button>
+            )}
             <Button
             variant="ghost"
               size="sm"
@@ -476,6 +603,23 @@ export default function ApplicationsPage() {
             <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
           <div className="flex-1 min-w-[200px]">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cliente
+            </label>
+            <select
+              value={selectedClientFilter}
+              onChange={(e) => setSelectedClientFilter(e.target.value)}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+            >
+              <option value="">Todos los clientes</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
             <Input
               label={t('applications.filters.application')}
               type="text"
@@ -516,6 +660,190 @@ export default function ApplicationsPage() {
       </Card>
 
       <ErrorMessage message={error || ''} className="mb-4" />
+
+      {/* Modal de distribución de costos */}
+      {distributingApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-2xl bg-white rounded-lg shadow-xl overflow-hidden mx-4">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Distribuir Costo de Aplicación
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Aplicación: {distributingApp.name}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Monto Total: ${distributingApp.price.toFixed(2)}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setDistributingApp(null)
+                  setDistributionRows([])
+                  setError(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <ErrorMessage message={error || ''} className="mb-4" />
+
+              <div className="space-y-3">
+                {distributionRows.map((row, index) => {
+                  let percentageValue = 0
+                  if (typeof row.percentage === 'number') {
+                    percentageValue = row.percentage
+                  } else if (typeof row.percentage === 'string' && row.percentage !== '') {
+                    const parsed = parseFloat(row.percentage)
+                    percentageValue = isNaN(parsed) ? 0 : parsed
+                  }
+                  const allocatedAmount = (distributingApp.price * percentageValue) / 100
+                  const availableClients = clients.filter(
+                    (c) => c.id !== TODOS_CLIENT_ID && !distributionRows.some((r, i) => i !== index && r.clientId === c.id)
+                  )
+
+                  return (
+                    <div key={index} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Cliente
+                        </label>
+                        <select
+                          value={row.clientId}
+                          onChange={(e) => handleUpdateDistributionRow(index, 'clientId', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                        >
+                          <option value="">Seleccionar cliente</option>
+                          {availableClients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                              {client.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="w-32">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Porcentaje (%)
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={row.percentage === '' ? '' : String(row.percentage)}
+                          onChange={(e) => {
+                            const value = e.target.value.trim()
+                            
+                            // Permitir string vacío
+                            if (value === '') {
+                              handleUpdateDistributionRow(index, 'percentage', '')
+                              return
+                            }
+                            
+                            // Validar que sea un número válido (permite "0", "0.", "0.5", etc.)
+                            const numberRegex = /^(\d+\.?\d*|\.\d+)$/
+                            if (numberRegex.test(value)) {
+                              const numValue = parseFloat(value)
+                              // Solo guardar si es un número válido y está en el rango
+                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+                                handleUpdateDistributionRow(index, 'percentage', numValue)
+                              } else if (value === '0' || value.startsWith('0.') || value === '.') {
+                                // Permitir escribir "0", "0.", ".5" mientras se escribe
+                                handleUpdateDistributionRow(index, 'percentage', value as any)
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Al perder el foco, convertir a número si es válido
+                            const value = e.target.value.trim()
+                            if (value === '') {
+                              handleUpdateDistributionRow(index, 'percentage', '')
+                            } else {
+                              const numValue = parseFloat(value)
+                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
+                                handleUpdateDistributionRow(index, 'percentage', numValue)
+                              } else {
+                                handleUpdateDistributionRow(index, 'percentage', '')
+                              }
+                            }
+                          }}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                          placeholder=""
+                        />
+                      </div>
+                      <div className="w-32">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Monto
+                        </label>
+                        <div className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                          ${allocatedAmount.toFixed(2)}
+                        </div>
+                      </div>
+                      {distributionRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDistributionRow(index)}
+                          className="mt-6 flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleAddDistributionRow}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
+                >
+                  <span>+</span>
+                  Agregar Cliente
+                </button>
+                <div className="text-sm text-gray-600">
+                  Total: <span className={`font-semibold ${Math.abs(distributionRows.reduce((sum, r) => sum + (typeof r.percentage === 'number' ? r.percentage : 0), 0) - 100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
+                    {distributionRows.reduce((sum, r) => sum + (typeof r.percentage === 'number' ? r.percentage : 0), 0).toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDistributingApp(null)
+                  setDistributionRows([])
+                  setError(null)
+                }}
+                disabled={savingDistribution}
+                className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-gray-700 hover:bg-gray-100 hover:border-gray-300 disabled:opacity-50"
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSaveDistribution}
+                disabled={savingDistribution}
+                className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-green-700 hover:bg-green-100 hover:border-green-300 disabled:opacity-50"
+              >
+                {savingDistribution ? t('common.saving') : t('common.save')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!dateRange ? (
         <Card className="mb-6">
