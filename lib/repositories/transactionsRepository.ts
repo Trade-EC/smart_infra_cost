@@ -22,11 +22,15 @@ export class TransactionsRepository {
     dateFrom: string,
     dateTo: string
   ): Promise<TransactionWithClients[]> {
+    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
+    const dateFromFormatted = dateFrom.split('T')[0]
+    const dateToFormatted = dateTo.split('T')[0]
+    
     const { data: transactions, error } = await this.supabase
       .from('transactions')
       .select('*')
-      .gte('month', dateFrom)
-      .lte('month', dateTo)
+      .gte('month', dateFromFormatted)
+      .lte('month', dateToFormatted)
       .order('month', { ascending: false })
 
     if (error) throw error
@@ -171,13 +175,17 @@ export class TransactionsRepository {
 
     const transactionIds = assignments.map(a => a.transaction_id)
 
+    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
+    const dateFromFormatted = dateFrom.split('T')[0]
+    const dateToFormatted = dateTo.split('T')[0]
+
     // Luego obtener las transacciones en el rango de fechas
     const { data: transactions, error: transError } = await this.supabase
       .from('transactions')
       .select('*')
       .in('id', transactionIds)
-      .gte('month', dateFrom)
-      .lte('month', dateTo)
+      .gte('month', dateFromFormatted)
+      .lte('month', dateToFormatted)
       .order('month', { ascending: false })
 
     if (transError) throw transError

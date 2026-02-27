@@ -36,12 +36,16 @@ export class ApplicationCostDistributionsRepository {
     startDate: string,
     endDate: string
   ): Promise<ApplicationCostDistribution[]> {
+    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
+    const startDateFormatted = startDate.split('T')[0]
+    const endDateFormatted = endDate.split('T')[0]
+    
     // Primero obtener las aplicaciones en el rango de fechas
     const { data: applications, error: appError } = await this.supabase
       .from('applications')
       .select('id')
-      .gte('date', startDate)
-      .lte('date', endDate)
+      .gte('date', startDateFormatted)
+      .lte('date', endDateFormatted)
 
     if (appError) throw appError
 
