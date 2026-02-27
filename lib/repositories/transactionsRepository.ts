@@ -1,5 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js'
-import type { Transaction, CreateTransactionData } from '@/types'
+import type { Transaction, CreateTransactionData, Client } from '@/types'
+
+export interface TransactionWithClients extends Transaction {
+  clients?: Client[]
+}
 
 export class TransactionsRepository {
   constructor(private supabase: SupabaseClient) {}
@@ -12,6 +16,47 @@ export class TransactionsRepository {
 
     if (error) throw error
     return data || []
+  }
+
+  async getByDateRange(
+    dateFrom: string,
+    dateTo: string
+  ): Promise<TransactionWithClients[]> {
+    const { data: transactions, error } = await this.supabase
+      .from('transactions')
+      .select('*')
+      .gte('month', dateFrom)
+      .lte('month', dateTo)
+      .order('month', { ascending: false })
+
+    if (error) throw error
+    if (!transactions || transactions.length === 0) return []
+
+    // Obtener los clientes asociados a cada transacción
+    const transactionIds = transactions.map(t => t.id)
+    const { data: assignments, error: assignError } = await this.supabase
+      .from('transaction_assignments')
+      .select('transaction_id, client_id, clients(id, name)')
+      .in('transaction_id', transactionIds)
+
+    if (assignError) throw assignError
+
+    // Agrupar clientes por transacción
+    const clientsByTransaction = new Map<string, Client[]>()
+    if (assignments) {
+      assignments.forEach((assignment: any) => {
+        if (assignment.clients) {
+          const existing = clientsByTransaction.get(assignment.transaction_id) || []
+          clientsByTransaction.set(assignment.transaction_id, [...existing, assignment.clients])
+        }
+      })
+    }
+
+    // Combinar transacciones con sus clientes
+    return transactions.map((transaction: Transaction) => ({
+      ...transaction,
+      clients: clientsByTransaction.get(transaction.id) || [],
+    }))
   }
 
   async getById(id: string): Promise<Transaction | null> {
