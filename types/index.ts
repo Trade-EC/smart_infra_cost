@@ -101,6 +101,22 @@ export interface CreateTransactionData {
   clientIds: string[]
 }
 
+// Transaction price config types (por cliente)
+export interface TransactionPriceConfig {
+  id: string
+  client_id: string
+  max_transactions: number | null
+  price_per_transaction: number
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertTransactionPriceConfigData {
+  clientId: string
+  maxTransactions: number | null
+  pricePerTransaction: number
+}
+
 // UI Component types
 export interface TableColumn<T> {
   key: keyof T | string
