@@ -2,7 +2,7 @@
 export interface Client {
   id: string
   name: string
-x  notes: string | null
+  notes: string | null
   created_at: string
 }
 
