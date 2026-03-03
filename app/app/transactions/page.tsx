@@ -157,10 +157,11 @@ export default function TransactionsPage() {
     setLoading(true)
 
     try {
-      const monthDate = new Date(month + '-01')
+      // Usar directamente el string de la fecha sin pasar por new Date() para evitar problemas de zona horaria
+      const monthDateString = `${month}-01`
       
       await transactionsRepo.create({
-        month: monthDate.toISOString().split('T')[0],
+        month: monthDateString,
         quantity: qty,
         costPerTransaction: autoPrice,
         description: null,
@@ -219,10 +220,11 @@ export default function TransactionsPage() {
     setError(null)
 
     try {
-      const monthDate = new Date(editingMonth + '-01')
+      // Usar directamente el string de la fecha sin pasar por new Date() para evitar problemas de zona horaria
+      const monthDateString = `${editingMonth}-01`
       
       await transactionsRepo.update(editingId, {
-        month: monthDate.toISOString().split('T')[0],
+        month: monthDateString,
         quantity: qty,
         costPerTransaction: autoPrice,
       })
@@ -477,8 +479,18 @@ export default function TransactionsPage() {
   ]
 
   const formatMonth = (monthStr: string) => {
-    const date = new Date(monthStr)
-    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+    // Parsear directamente el string de fecha sin usar new Date() para evitar problemas de zona horaria
+    // monthStr viene como "YYYY-MM-DD" o "YYYY-MM-01"
+    const parts = monthStr.split('-')
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10) - 1 // getMonth() usa índice 0-11
+      if (!isNaN(year) && !isNaN(month) && month >= 0 && month < 12) {
+        return `${monthNames[month]} ${year}`
+      }
+    }
+    // Fallback si el formato no es el esperado
+    return monthStr
   }
 
   const columns = [

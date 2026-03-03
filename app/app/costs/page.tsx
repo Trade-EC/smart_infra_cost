@@ -137,21 +137,44 @@ export default function CostsPage() {
   }
 
   const formatMonth = (monthStr: string) => {
-    const date = new Date(monthStr)
+    // Parsear directamente el string de fecha sin usar new Date() para evitar problemas de zona horaria
+    // monthStr viene como "YYYY-MM-DD" o "YYYY-MM-01"
     const monthNames = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ]
-    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+    const parts = monthStr.split('-')
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10) - 1 // getMonth() usa índice 0-11
+      if (!isNaN(year) && !isNaN(month) && month >= 0 && month < 12) {
+        return `${monthNames[month]} ${year}`
+      }
+    }
+    // Fallback si el formato no es el esperado
+    return monthStr
   }
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    // Parsear directamente el string de fecha sin usar new Date() para evitar problemas de zona horaria
+    // dateStr viene como "YYYY-MM-DD"
+    const parts = dateStr.split('-')
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10)
+      const month = parseInt(parts[1], 10) - 1 // Los meses van de 0-11
+      const day = parseInt(parts[2], 10)
+      
+      const monthNames = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+      ]
+      
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day) && month >= 0 && month < 12) {
+        return `${day} de ${monthNames[month]} de ${year}`
+      }
+    }
+    // Fallback si el formato no es el esperado
+    return dateStr
   }
 
   // Calcular totales

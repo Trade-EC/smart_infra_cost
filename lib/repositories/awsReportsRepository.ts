@@ -26,11 +26,15 @@ export class AWSReportsRepository {
     startDate: string,
     endDate: string
   ): Promise<AWSReport[]> {
+    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
+    const startDateFormatted = startDate.split('T')[0]
+    const endDateFormatted = endDate.split('T')[0]
+    
     const { data, error } = await this.supabase
       .from('aws_reports')
       .select('*')
-      .gte('date', startDate)
-      .lte('date', endDate)
+      .gte('date', startDateFormatted)
+      .lte('date', endDateFormatted)
       .order('cloud_account_number', { ascending: true })
 
     if (error) throw error
@@ -42,12 +46,16 @@ export class AWSReportsRepository {
     startDate: string,
     endDate: string
   ): Promise<AWSReport[]> {
+    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
+    const startDateFormatted = startDate.split('T')[0]
+    const endDateFormatted = endDate.split('T')[0]
+    
     const { data, error } = await this.supabase
       .from('aws_reports')
       .select('*')
       .eq('client_id', clientId)
-      .gte('date', startDate)
-      .lte('date', endDate)
+      .gte('date', startDateFormatted)
+      .lte('date', endDateFormatted)
       .order('cloud_account_number', { ascending: true })
 
     if (error) throw error
