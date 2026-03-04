@@ -260,7 +260,8 @@ export default function ReportsPage() {
       const reportData = processGroupedData(groupedByMonth)
       setClientsData(reportData)
     } catch (error: any) {
-      console.error('Error al cargar reporte:', error)
+      const message = error?.message ?? String(error)
+      console.error('Error al cargar reporte:', message, error)
     } finally {
       setLoading(false)
     }
@@ -324,7 +325,8 @@ export default function ReportsPage() {
 
   const data = getActiveData()
 
-  // Nombres de clientes/segmentos para la tabla
+  // Nombres de clientes/segmentos para la tabla (filas = un cliente por fila)
+  // En AWS: solo clientes que tengan al menos un costo en el rango; meses sin costo se muestran vacíos
   const allSegmentNames = useMemo(() => {
     const names = new Set<string>()
     data.forEach(monthData => {
@@ -447,12 +449,18 @@ export default function ReportsPage() {
                         )
                         const amount = segment ? segment.amount : 0
                         rowTotal += amount
+                        const cellContent =
+                          segment && amount > 0
+                            ? `$${amount.toFixed(2)}`
+                            : activeTab === 'aws'
+                              ? ''
+                              : '-'
                         return (
                           <td
                             key={monthData.month}
                             className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 text-right"
                           >
-                            {segment ? `$${segment.amount.toFixed(2)}` : '-'}
+                            {cellContent}
                           </td>
                         )
                       })}

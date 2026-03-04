@@ -33,7 +33,7 @@ export class ApplicationCostDistributionsRepository {
 
   /**
    * Consulta masiva: todas las distribuciones de aplicaciones en un rango de fechas,
-   * con fecha de la aplicación. Una sola consulta para reportes.
+   * con fecha de la aplicación. Dos consultas para evitar filtrar por tabla anidada.
    */
   async getByDateRange(
     startDate: string,
@@ -42,20 +42,31 @@ export class ApplicationCostDistributionsRepository {
     const startDateFormatted = startDate.split('T')[0]
     const endDateFormatted = endDate.split('T')[0]
 
-    const { data, error } = await this.supabase
+    const { data: applications, error: appError } = await this.supabase
+      .from('applications')
+      .select('id, date')
+      .gte('date', startDateFormatted)
+      .lte('date', endDateFormatted)
+
+    if (appError) throw appError
+    if (!applications || applications.length === 0) return []
+
+    const applicationIds = applications.map((app: any) => app.id)
+    const dateByApplicationId = new Map(applications.map((app: any) => [app.id, app.date]))
+
+    const { data: distributions, error: distError } = await this.supabase
       .from('application_cost_distributions')
-      .select('application_id, client_id, allocated_amount, applications!inner(date)')
-      .gte('applications.date', startDateFormatted)
-      .lte('applications.date', endDateFormatted)
+      .select('application_id, client_id, allocated_amount')
+      .in('application_id', applicationIds)
 
-    if (error) throw error
-    if (!data || data.length === 0) return []
+    if (distError) throw distError
+    if (!distributions || distributions.length === 0) return []
 
-    return data.map((row: any) => ({
+    return distributions.map((row: any) => ({
       application_id: row.application_id,
       client_id: row.client_id,
       allocated_amount: parseFloat(row.allocated_amount || 0),
-      application_date: row.applications?.date || '',
+      application_date: dateByApplicationId.get(row.application_id) || '',
     }))
   }
 
