@@ -201,7 +201,7 @@ export class TransactionsRepository {
 
   /**
    * Consulta masiva: todas las asignaciones de transacciones en un rango de fechas,
-   * con mes, cliente y monto asignado. Una sola consulta para reportes.
+   * con mes, cliente y monto asignado. Dos consultas para evitar filtrar por tabla anidada.
    */
   async getAssignmentsByDateRange(
     dateFrom: string,
@@ -209,22 +209,33 @@ export class TransactionsRepository {
   ): Promise<Array<{ month: string; client_id: string; client_name: string; assigned_cost: number }>> {
     const dateFromFormatted = dateFrom.split('T')[0]
     const dateToFormatted = dateTo.split('T')[0]
-    const [y, m] = dateToFormatted.split('-').map(Number)
-    const lastDay = new Date(y, m - 1, 0).getDate()
-    const endMonth = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
     const startMonth = dateFromFormatted.slice(0, 7) + '-01'
+    const [y, m] = dateToFormatted.split('-').map(Number)
+    const lastDay = new Date(y, m, 0).getDate()
+    const endMonth = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-    const { data, error } = await this.supabase
+    const { data: transactions, error: transError } = await this.supabase
+      .from('transactions')
+      .select('id, month')
+      .gte('month', startMonth)
+      .lte('month', endMonth)
+
+    if (transError) throw transError
+    if (!transactions || transactions.length === 0) return []
+
+    const transactionIds = transactions.map((t: any) => t.id)
+    const monthByTransactionId = new Map(transactions.map((t: any) => [t.id, t.month]))
+
+    const { data: assignments, error: assignError } = await this.supabase
       .from('transaction_assignments')
-      .select('assigned_cost, client_id, clients(id,name), transactions!inner(month)')
-      .gte('transactions.month', startMonth)
-      .lte('transactions.month', endMonth)
+      .select('transaction_id, assigned_cost, client_id, clients(id,name)')
+      .in('transaction_id', transactionIds)
 
-    if (error) throw error
-    if (!data || data.length === 0) return []
+    if (assignError) throw assignError
+    if (!assignments || assignments.length === 0) return []
 
-    return data.map((row: any) => ({
-      month: row.transactions?.month || '',
+    return assignments.map((row: any) => ({
+      month: monthByTransactionId.get(row.transaction_id) || '',
       client_id: row.client_id || '',
       client_name: row.clients?.name || 'Sin nombre',
       assigned_cost: parseFloat(row.assigned_cost || 0),

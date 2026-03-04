@@ -18,6 +18,7 @@ export default function Sidebar() {
   const supabase = createClient()
   const [userRole, setUserRole] = useState<'owner' | 'admin' | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isExpanded, setIsExpanded] = useState(true)
 
   useEffect(() => {
     checkUserRole()
@@ -29,7 +30,7 @@ export default function Sidebar() {
       if (user?.user_metadata?.role) {
         setUserRole(user.user_metadata.role)
       } else {
-        setUserRole('admin') // Por defecto es admin si no tiene rol
+        setUserRole('admin')
       }
     } catch (error) {
       console.error('Error al obtener rol del usuario:', error)
@@ -45,9 +46,7 @@ export default function Sidebar() {
     router.refresh()
   }
 
-  // Filtrar items de navegación basándose en el rol
   const filteredItems = NAVIGATION_ITEMS.filter((item: NavItem) => {
-    // Solo mostrar "usuarios" si el usuario es Owner
     if (item.key === 'users') {
       return isOwner({ user_metadata: { role: userRole } })
     }
@@ -55,44 +54,85 @@ export default function Sidebar() {
   })
 
   return (
-    <div className="flex h-screen w-64 flex-col bg-gray-900 text-white">
-      {/* Logo/Header */}
-      <div className="flex h-16 items-center justify-center border-b border-gray-800 px-4">
-        <h1 className="text-xl font-bold">{t('appName')}</h1>
+    <aside
+      className={`flex h-screen flex-col bg-gray-900 text-white transition-all duration-300 ${
+        isExpanded ? 'w-64' : 'w-16'
+      }`}
+    >
+      {/* Botón colapsar/expandir + Logo/Header */}
+      <div className="flex h-16 shrink-0 items-center border-b border-gray-800">
+        <button
+          type="button"
+          onClick={() => setIsExpanded((prev) => !prev)}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+          aria-label={isExpanded ? 'Colapsar menú' : 'Expandir menú'}
+        >
+          <svg
+            className={`h-5 w-5 transition-transform duration-300 ${
+              isExpanded ? 'rotate-0' : 'rotate-180'
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
+        {isExpanded && (
+          <div className="min-w-0 flex-1 overflow-hidden px-2">
+            <h1 className="truncate text-lg font-bold">{t('appName')}</h1>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {!loading && filteredItems.map((item: NavItem) => {
-          const isActive = pathname === item.href
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              <span className="text-lg">{item.icon}</span>
-              <span>{t(`nav.${item.key}` as TranslationKey)}</span>
-            </Link>
-          )
-        })}
+      <nav className="flex-1 space-y-1 overflow-hidden px-2 py-4">
+        {!loading &&
+          filteredItems.map((item: NavItem) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.key}
+                href={item.href}
+                title={!isExpanded ? t(`nav.${item.key}` as TranslationKey) : undefined}
+                className={`flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isExpanded ? 'gap-3' : 'justify-center px-0'
+                } ${
+                  isActive
+                    ? 'bg-gray-800 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`}
+              >
+                <span className="shrink-0 text-lg">{item.icon}</span>
+                {isExpanded && (
+                  <span className="min-w-0 truncate">
+                    {t(`nav.${item.key}` as TranslationKey)}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
       </nav>
 
-      {/* Logout Button */}
-      <div className="border-t border-gray-800 p-4">
+      {/* Logout */}
+      <div className="shrink-0 border-t border-gray-800 p-2">
         <button
+          type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white"
+          title={!isExpanded ? t('nav.logout') : undefined}
+          className={`flex w-full items-center rounded-lg px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-white ${
+            isExpanded ? 'gap-3' : 'justify-center px-0'
+          }`}
         >
-          <span className="text-lg">🚪</span>
-          <span>{t('nav.logout')}</span>
+          <span className="shrink-0 text-lg">🚪</span>
+          {isExpanded && <span>{t('nav.logout')}</span>}
         </button>
       </div>
-    </div>
+    </aside>
   )
 }
-
