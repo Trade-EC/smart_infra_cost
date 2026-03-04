@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { AWSReportsRepository, ClientsRepository } from '@/lib/repositories'
+import {
+  AWSReportsRepository,
+  ClientsRepository,
+  ApplicationsRepository,
+  TransactionsRepository,
+  ApplicationCostDistributionsRepository,
+} from '@/lib/repositories'
 import DateRangePicker from '@/components/ui/DateRangePicker'
 import Select from '@/components/ui/Select'
 
@@ -46,6 +52,12 @@ export default function ReportsPage() {
   const supabase = useMemo(() => createClient(), [])
   const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
+  const applicationsRepo = useMemo(() => new ApplicationsRepository(supabase), [supabase])
+  const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
+  const distributionsRepo = useMemo(
+    () => new ApplicationCostDistributionsRepository(supabase),
+    [supabase]
+  )
 
   useEffect(() => {
     loadClients()
@@ -167,119 +179,88 @@ export default function ReportsPage() {
 
     setLoading(true)
     try {
-      const startMonth = getFirstDayOfMonth(dateRange.start)
-      const endMonth = getLastDayOfMonth(dateRange.end)
+      const startDate = dateRange.start
+      const endDate = dateRange.end
 
-      // Obtener monthly_costs en el rango de fechas
-      const { data: monthlyCosts, error: monthlyError } = await supabase
-        .from('monthly_costs')
-        .select('id, month')
-        .gte('month', startMonth)
-        .lte('month', endMonth)
-
-      if (monthlyError) throw monthlyError
-
-      const monthlyCostIds = monthlyCosts?.map(mc => mc.id) || []
-      
-      // Obtener cost_allocations
-      const { data: costAllocations, error: allocError } = await supabase
-        .from('cost_allocations')
-        .select('id, monthly_cost_id')
-        .in('monthly_cost_id', monthlyCostIds)
-
-      if (allocError) throw allocError
-
-      const costAllocationIds = costAllocations?.map(ca => ca.id) || []
-
-      // Obtener distribuciones de costos con clientes
-      const { data: distributions, error: distError } = await supabase
-        .from('cost_distributions')
-        .select(`
-          allocated_amount,
-          cost_allocation_id,
-          clients!inner (
-            id,
-            name
-          )
-        `)
-        .in('cost_allocation_id', costAllocationIds)
-
-      if (distError) throw distError
-
-      // Obtener asignaciones de transacciones con clientes
-      const { data: transactions, error: transError } = await supabase
-        .from('transaction_assignments')
-        .select(`
-          assigned_cost,
-          transaction_id,
-          clients!inner (
-            id,
-            name
-          ),
-          transactions!inner (
-            month
-          )
-        `)
-        .gte('transactions.month', startMonth)
-        .lte('transactions.month', endMonth)
-
-      if (transError) throw transError
-
-      // Crear mapa de cost_allocation_id -> month
-      const costAllocationToMonth = new Map<string, string>()
-      if (monthlyCosts && costAllocations) {
-        const monthlyCostMap = new Map(monthlyCosts.map(mc => [mc.id, mc.month]))
-        costAllocations.forEach(ca => {
-          const month = monthlyCostMap.get(ca.monthly_cost_id)
-          if (month) {
-            costAllocationToMonth.set(ca.id, month)
-          }
-        })
+      let clientList = clients
+      if (!clientList || clientList.length === 0) {
+        const data = await clientsRepo.getAll()
+        clientList = data.map(c => ({ id: c.id, name: c.name }))
+        setClients(clientList)
       }
 
-      // Agrupar por mes y cliente
+      const clientIdToName = new Map(clientList.map(c => [c.id, c.name]))
+
+      // 1. Solo 4 consultas masivas en paralelo (evita cascada por cliente)
+      const [allAssignments, allDistributions, allAwsReports, allApplications] =
+        await Promise.all([
+          transactionsRepo.getAssignmentsByDateRange(startDate, endDate),
+          distributionsRepo.getByDateRange(startDate, endDate),
+          awsReportsRepo.getByDateRange(startDate, endDate),
+          applicationsRepo.getAll({ dateFrom: startDate, dateTo: endDate }),
+        ])
+
       const groupedByMonth: Record<string, Record<string, number>> = {}
 
-      // Sumar costos de aplicaciones por mes y cliente
-      ;(distributions || []).forEach((item: any) => {
-        const month = costAllocationToMonth.get(item.cost_allocation_id)
-        const clientId = item.clients?.id
-        const clientName = item.clients?.name || 'Sin nombre'
-        
-        // Filtrar por cliente si está seleccionado
-        if (selectedClientId && clientId !== selectedClientId) return
-        
-        if (month) {
-          const monthKey = getMonthKey(month)
-          if (!groupedByMonth[monthKey]) {
-            groupedByMonth[monthKey] = {}
-          }
-          groupedByMonth[monthKey][clientName] = (groupedByMonth[monthKey][clientName] || 0) + parseFloat(item.allocated_amount || 0)
-        }
+      const addToGroup = (monthKey: string, clientName: string, amount: number) => {
+        if (!groupedByMonth[monthKey]) groupedByMonth[monthKey] = {}
+        groupedByMonth[monthKey][clientName] =
+          (groupedByMonth[monthKey][clientName] || 0) + amount
+      }
+
+      // 2. Procesar todo en memoria
+
+      // A. Transacciones
+      ;(allAssignments || []).forEach((row: any) => {
+        if (selectedClientId && row.client_id !== selectedClientId) return
+        const monthKey = getMonthKey(row.month)
+        addToGroup(monthKey, row.client_name || 'Sin nombre', row.assigned_cost || 0)
       })
 
-      // Sumar costos de transacciones por mes y cliente
-      ;(transactions || []).forEach((item: any) => {
-        const month = item.transactions?.month
-        const clientId = item.clients?.id
-        const clientName = item.clients?.name || 'Sin nombre'
-        
-        // Filtrar por cliente si está seleccionado
-        if (selectedClientId && clientId !== selectedClientId) return
-        
-        if (month) {
-          const monthKey = getMonthKey(month)
-          if (!groupedByMonth[monthKey]) {
-            groupedByMonth[monthKey] = {}
-          }
-          groupedByMonth[monthKey][clientName] = (groupedByMonth[monthKey][clientName] || 0) + parseFloat(item.assigned_cost || 0)
-        }
+      // B. Distribuciones de aplicaciones (monto ya asignado por cliente)
+      ;(allDistributions || []).forEach((dist: any) => {
+        if (selectedClientId && dist.client_id !== selectedClientId) return
+        const clientName = clientIdToName.get(dist.client_id) || 'Sin nombre'
+        const monthKey = getMonthKey(dist.application_date)
+        addToGroup(monthKey, clientName, dist.allocated_amount || 0)
+      })
+
+      // C. Aplicaciones con cliente directo (sin distribución): repartir precio entre esos clientes
+      const distSet = new Set(
+        (allDistributions || []).map(
+          (d: any) => `${d.application_id}_${d.client_id}`
+        )
+      )
+      ;(allApplications || []).forEach((app: any) => {
+        const monthKey = getMonthKey(app.date)
+        const price = app.price || 0
+        const clientsWithoutDist = (app.clients || []).filter(
+          (c: any) => !distSet.has(`${app.id}_${c.id}`)
+        )
+        const toProcess = selectedClientId
+          ? clientsWithoutDist.filter((c: any) => c.id === selectedClientId)
+          : clientsWithoutDist
+        if (toProcess.length === 0) return
+        const amountEach = price / toProcess.length
+        toProcess.forEach((c: any) => {
+          addToGroup(monthKey, c.name || 'Sin nombre', amountEach)
+        })
+      })
+
+      // D. AWS
+      ;(allAwsReports || []).forEach((r: any) => {
+        if (selectedClientId && r.client_id !== selectedClientId) return
+        const clientName = r.client_id
+          ? (clientIdToName.get(r.client_id) || 'Sin asignar')
+          : 'Sin asignar'
+        const monthKey = getMonthKey(r.date)
+        addToGroup(monthKey, clientName, r.seller_cost || 0)
       })
 
       const reportData = processGroupedData(groupedByMonth)
       setClientsData(reportData)
     } catch (error: any) {
-      console.error('Error:', error)
+      console.error('Error al cargar reporte:', error)
     } finally {
       setLoading(false)
     }
@@ -415,13 +396,17 @@ export default function ReportsPage() {
             : 'Costos AWS por Mes'}
         </h2>
         {!dateRange && (
-          <p className="text-center text-gray-500">Selecciona un rango de fechas para ver los reportes</p>
+          <p className="text-center text-gray-500">
+            Selecciona un rango de fechas para ver los reportes
+          </p>
         )}
         {dateRange && loading && (
           <p className="text-center text-gray-500">Cargando...</p>
         )}
         {dateRange && !loading && data.length === 0 && (
-          <p className="text-center text-gray-500">No hay datos para mostrar en el rango de fechas seleccionado</p>
+          <p className="text-center text-gray-500">
+            No hay datos para mostrar en el rango de fechas seleccionado
+          </p>
         )}
       </div>
 
@@ -436,7 +421,10 @@ export default function ReportsPage() {
                     Cliente
                   </th>
                   {data.map((monthData) => (
-                    <th key={monthData.month} className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap">
+                    <th
+                      key={monthData.month}
+                      className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 whitespace-nowrap"
+                    >
                       {formatMonth(monthData.month)}
                     </th>
                   ))}
@@ -454,11 +442,16 @@ export default function ReportsPage() {
                         {clientName}
                       </td>
                       {data.map((monthData) => {
-                        const segment = monthData.segments.find(s => s.name === clientName)
+                        const segment = monthData.segments.find(
+                          (s) => s.name === clientName
+                        )
                         const amount = segment ? segment.amount : 0
                         rowTotal += amount
                         return (
-                          <td key={monthData.month} className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 text-right">
+                          <td
+                            key={monthData.month}
+                            className="whitespace-nowrap px-6 py-4 text-sm text-gray-500 text-right"
+                          >
                             {segment ? `$${segment.amount.toFixed(2)}` : '-'}
                           </td>
                         )
@@ -474,12 +467,18 @@ export default function ReportsPage() {
                     Total
                   </td>
                   {data.map((monthData) => (
-                    <td key={monthData.month} className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900 text-right">
+                    <td
+                      key={monthData.month}
+                      className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900 text-right"
+                    >
                       ${monthData.total.toFixed(2)}
                     </td>
                   ))}
                   <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-gray-900 text-right">
-                    ${data.reduce((sum, m) => sum + m.total, 0).toFixed(2)}
+                    $
+                    {data
+                      .reduce((sum, m) => sum + m.total, 0)
+                      .toFixed(2)}
                   </td>
                 </tr>
               </tbody>

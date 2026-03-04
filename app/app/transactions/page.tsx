@@ -147,12 +147,8 @@ export default function TransactionsPage() {
       return
     }
 
-    // Calcular el precio automáticamente según los rangos configurados
-    const autoPrice = getAutoPriceForQuantity(selectedClientId, qty)
-    if (autoPrice === null) {
-      setError('No hay configuración de precios para este cliente. Por favor configura los precios en la pestaña "Precios" primero.')
-      return
-    }
+    // Calcular el precio automáticamente según los rangos configurados (si no hay config, usar 0)
+    const autoPrice = getAutoPriceForQuantity(selectedClientId, qty) ?? 0
 
     setLoading(true)
 
@@ -209,12 +205,8 @@ export default function TransactionsPage() {
       return
     }
 
-    // Calcular el precio automáticamente según los rangos configurados
-    const autoPrice = getAutoPriceForQuantity(editingClientId, qty)
-    if (autoPrice === null) {
-      setError('No hay configuración de precios para este cliente. Por favor configura los precios en la pestaña "Precios" primero.')
-      return
-    }
+    // Calcular el precio automáticamente según los rangos configurados (si no hay config, usar 0)
+    const autoPrice = getAutoPriceForQuantity(editingClientId, qty) ?? 0
 
     setLoading(true)
     setError(null)
@@ -750,15 +742,10 @@ export default function TransactionsPage() {
             </label>
             <Input
               type="text"
-              value={calculatedPrice !== null ? `$${calculatedPrice.toFixed(4)}` : '-'}
+              value={calculatedPrice !== null ? `$${calculatedPrice.toFixed(4)}` : '$0.0000'}
               disabled
               className="w-full bg-gray-50"
             />
-            {calculatedPrice === null && selectedClientId && quantity && (
-              <p className="mt-1 text-xs text-red-600">
-                No hay configuración de precios para este cliente
-              </p>
-            )}
           </div>
 
           <div className="flex-1 min-w-[150px]">
@@ -782,8 +769,7 @@ export default function TransactionsPage() {
                 loading ||
                 !month ||
                 !selectedClientId ||
-                !quantity ||
-                calculatedPrice === null
+                !quantity
               }
               className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-green-700 hover:bg-green-100 hover:border-green-300 disabled:opacity-50 whitespace-nowrap"
             >

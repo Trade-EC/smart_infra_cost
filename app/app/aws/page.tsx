@@ -12,6 +12,7 @@ import {
   ErrorMessage,
   DateRangePicker,
   Input,
+  Select,
 } from '@/components/ui'
 
 interface AWSReportRow {
@@ -302,23 +303,18 @@ export default function AWSPage() {
 
       {/* Sección de carga de CSV */}
       <Card title={t('aws.uploadCSVTitle')} className="mb-6">
-        <div className="space-y-4">
-          <div>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha del Reporte
+              Rango de Fechas
             </label>
-            <DateRangePicker
-              value={reportDateRange}
-              onChange={setReportDateRange}
-            />
+            <DateRangePicker value={reportDateRange} onChange={setReportDateRange} />
             <p className="mt-1 text-xs text-gray-500">
               Esta fecha se asignará a todos los registros del CSV
             </p>
           </div>
-          <div>
-            <p className="mb-3 text-sm text-gray-600">
-              {t('aws.csvFormat')}
-            </p>
+          <div className="flex-1 min-w-[300px]">
+            <p className="mb-2 text-sm font-medium text-gray-700">Archivo CSV</p>
             <input
               type="file"
               accept=".csv"
@@ -333,11 +329,11 @@ export default function AWSPage() {
         </div>
       </Card>
 
-      {/* Filtros */}
+      {/* Filtro de búsqueda unificado */}
       {reportData.length > 0 && (
         <div className="mb-6 rounded-lg bg-white p-6 shadow">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1">
               <Input
                 label="Filtrar por nombre del cliente"
                 type="text"
@@ -402,19 +398,16 @@ export default function AWSPage() {
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       ${row.sellerCost.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3 text-sm">
-                      <select
+                    <td className="px-4 py-3 text-sm min-w-[220px]">
+                      <Select
                         value={row.clientId || ''}
-                        onChange={(e) => handleClientChange(row.cloudAccountNumber, e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                      >
-                        <option value="">Seleccionar cliente</option>
-                        {clients.map((client) => (
-                          <option key={client.id} value={client.id}>
-                            {client.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => handleClientChange(row.cloudAccountNumber, val)}
+                        options={clients.map((client) => ({
+                          value: client.id,
+                          label: client.name,
+                        }))}
+                        placeholder="Seleccionar cliente"
+                      />
                     </td>
                   </tr>
                   ))

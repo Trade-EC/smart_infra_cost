@@ -20,6 +20,7 @@ import {
   Table,
 } from '@/components/ui'
 import DateRangePicker from '@/components/ui/DateRangePicker'
+import Select from '@/components/ui/Select'
 
 export default function ApplicationsPage() {
   const { t } = useTranslation()
@@ -459,31 +460,25 @@ export default function ApplicationsPage() {
 
                   return (
                     <div key={index} className="flex items-center gap-2">
-                      <select
-                        value={selectedClientId}
-                        onChange={(e) =>
-                          updateClientSelector(app.id, index, e.target.value)
-                        }
-                        className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                      >
-                        <option value="">Seleccione un Cliente</option>
-                        {clients
-                          .filter((client) => {
-                            const otherSelections = selectors.filter(
-                              (id, i) => i !== index && id !== ''
-                            )
-                            return !otherSelections.includes(client.id)
-                          })
-                          .map((client) => (
-                            <option key={client.id} value={client.id}>
-                              {client.name}
-                            </option>
-                          ))}
-                      </select>
+                      <div className="flex-1">
+                        <Select
+                          value={selectedClientId}
+                          onChange={(val) => updateClientSelector(app.id, index, val)}
+                          options={clients
+                            .filter((client) => {
+                              const otherSelections = selectors.filter(
+                                (id, i) => i !== index && id !== ''
+                              )
+                              return !otherSelections.includes(client.id)
+                            })
+                            .map((client) => ({ value: client.id, label: client.name }))}
+                          placeholder="Seleccione un Cliente"
+                        />
+                      </div>
                       {!isLastEmpty && (
                         <button
                           onClick={() => removeClientSelector(app.id, index)}
-                          className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200"
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 shrink-0"
                           title={t('common.remove')}
                         >
                           ×
@@ -602,22 +597,16 @@ export default function ApplicationsPage() {
             </label>
             <DateRangePicker value={dateRange} onChange={setDateRange} />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="w-64">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cliente
+              Filtrar por Cliente
             </label>
-            <select
+            <Select
               value={selectedClientFilter}
-              onChange={(e) => setSelectedClientFilter(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="">Todos los clientes</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedClientFilter}
+              options={clients.map((c) => ({ value: c.id, label: c.name }))}
+              placeholder="Todos los clientes"
+            />
           </div>
           <div className="flex-1 min-w-[200px]">
             <Input
@@ -716,18 +705,15 @@ export default function ApplicationsPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                           Cliente
                         </label>
-                        <select
+                        <Select
                           value={row.clientId}
-                          onChange={(e) => handleUpdateDistributionRow(index, 'clientId', e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-                        >
-                          <option value="">Seleccionar cliente</option>
-                          {availableClients.map((client) => (
-                            <option key={client.id} value={client.id}>
-                              {client.name}
-                            </option>
-                          ))}
-                        </select>
+                          onChange={(val) => handleUpdateDistributionRow(index, 'clientId', val)}
+                          options={availableClients.map((client) => ({
+                            value: client.id,
+                            label: client.name,
+                          }))}
+                          placeholder="Seleccionar cliente"
+                        />
                       </div>
                       <div className="w-32">
                         <label className="block text-sm font-medium text-gray-700 mb-1">

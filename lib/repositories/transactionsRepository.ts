@@ -198,4 +198,36 @@ export class TransactionsRepository {
       assigned_cost: assignmentMap.get(transaction.id) || 0,
     }))
   }
+
+  /**
+   * Consulta masiva: todas las asignaciones de transacciones en un rango de fechas,
+   * con mes, cliente y monto asignado. Una sola consulta para reportes.
+   */
+  async getAssignmentsByDateRange(
+    dateFrom: string,
+    dateTo: string
+  ): Promise<Array<{ month: string; client_id: string; client_name: string; assigned_cost: number }>> {
+    const dateFromFormatted = dateFrom.split('T')[0]
+    const dateToFormatted = dateTo.split('T')[0]
+    const [y, m] = dateToFormatted.split('-').map(Number)
+    const lastDay = new Date(y, m - 1, 0).getDate()
+    const endMonth = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    const startMonth = dateFromFormatted.slice(0, 7) + '-01'
+
+    const { data, error } = await this.supabase
+      .from('transaction_assignments')
+      .select('assigned_cost, client_id, clients(id,name), transactions!inner(month)')
+      .gte('transactions.month', startMonth)
+      .lte('transactions.month', endMonth)
+
+    if (error) throw error
+    if (!data || data.length === 0) return []
+
+    return data.map((row: any) => ({
+      month: row.transactions?.month || '',
+      client_id: row.client_id || '',
+      client_name: row.clients?.name || 'Sin nombre',
+      assigned_cost: parseFloat(row.assigned_cost || 0),
+    }))
+  }
 }
