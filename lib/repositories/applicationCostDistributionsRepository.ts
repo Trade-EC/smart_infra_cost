@@ -31,6 +31,34 @@ export class ApplicationCostDistributionsRepository {
     return data || []
   }
 
+  /**
+   * Consulta masiva: todas las distribuciones de aplicaciones en un rango de fechas,
+   * con fecha de la aplicación. Una sola consulta para reportes.
+   */
+  async getByDateRange(
+    startDate: string,
+    endDate: string
+  ): Promise<Array<{ application_id: string; client_id: string; allocated_amount: number; application_date: string }>> {
+    const startDateFormatted = startDate.split('T')[0]
+    const endDateFormatted = endDate.split('T')[0]
+
+    const { data, error } = await this.supabase
+      .from('application_cost_distributions')
+      .select('application_id, client_id, allocated_amount, applications!inner(date)')
+      .gte('applications.date', startDateFormatted)
+      .lte('applications.date', endDateFormatted)
+
+    if (error) throw error
+    if (!data || data.length === 0) return []
+
+    return data.map((row: any) => ({
+      application_id: row.application_id,
+      client_id: row.client_id,
+      allocated_amount: parseFloat(row.allocated_amount || 0),
+      application_date: row.applications?.date || '',
+    }))
+  }
+
   async getByClientAndDateRange(
     clientId: string,
     startDate: string,

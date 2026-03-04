@@ -17,6 +17,7 @@ import {
   Input,
   ErrorMessage,
   DateRangePicker,
+  Select,
 } from '@/components/ui'
 
 interface TransactionWithCost extends Transaction {
@@ -191,12 +192,13 @@ export default function CostsPage() {
 
       <ErrorMessage message={error || ''} className="mb-4" />
 
-      {/* Filtros */}
+      {/* Filtros unificados con Reportes */}
       <div className="mb-6 rounded-lg bg-white p-6 shadow">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
+        <div className="flex flex-wrap items-end gap-4">
+          {/* Contenedor de Fechas - flex-1 para que tome el espacio sobrante */}
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fechas
+              Rango de Fechas
             </label>
             <DateRangePicker
               value={dateRange}
@@ -204,22 +206,17 @@ export default function CostsPage() {
             />
           </div>
 
-          <div>
+          {/* Filtro de Cliente - w-64 para ancho fijo idéntico a Reportes */}
+          <div className="w-64">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Cliente
+              Filtrar por Cliente
             </label>
-            <select
+            <Select
               value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="">Seleccionar cliente</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedClientId}
+              options={clients.map(c => ({ value: c.id, label: c.name }))}
+              placeholder="Seleccionar cliente"
+            />
           </div>
         </div>
       </div>
