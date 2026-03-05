@@ -53,6 +53,112 @@ async function requireOwnerInAPI() {
   }
 }
 
+// PATCH - Actualizar email y/o rol de usuario
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireOwnerInAPI()
+
+    const { id } = await context.params
+    let userId = id
+    if (!userId) {
+      const url = new URL(request.url)
+      const pathParts = url.pathname.split('/')
+      userId = pathParts[pathParts.length - 1]
+    }
+
+    if (!userId || typeof userId !== 'string') {
+      return NextResponse.json(
+        { error: 'ID de usuario inválido o no proporcionado' },
+        { status: 400 }
+      )
+    }
+
+    const cleanedId = userId.trim()
+    const decodedId = decodeURIComponent(cleanedId)
+
+    if (!isValidUUID(decodedId)) {
+      return NextResponse.json(
+        { error: `ID de usuario no es un UUID válido. Recibido: "${decodedId}"` },
+        { status: 400 }
+      )
+    }
+
+    const body = await request.json()
+    const { email, role } = body
+
+    if (!email && !role) {
+      return NextResponse.json(
+        { error: 'Debes enviar al menos email o role para actualizar' },
+        { status: 400 }
+      )
+    }
+
+    if (role && role !== 'owner' && role !== 'admin' && role !== 'reports') {
+      return NextResponse.json(
+        { error: 'Rol inválido. Debe ser "owner", "admin" o "reports"' },
+        { status: 400 }
+      )
+    }
+
+    const adminClient = createAdminClient()
+
+    const { data: { user: currentUser }, error: getUserError } =
+      await adminClient.auth.admin.getUserById(decodedId)
+
+    if (getUserError || !currentUser) {
+      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
+    }
+
+    const updatePayload: { email?: string; user_metadata?: object } = {}
+    if (email) updatePayload.email = email.trim()
+    if (role) {
+      updatePayload.user_metadata = {
+        ...currentUser.user_metadata,
+        role,
+      }
+    }
+
+    const { data, error } = await adminClient.auth.admin.updateUserById(
+      decodedId,
+      updatePayload
+    )
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || 'Error al actualizar el usuario' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.user_metadata?.role || 'admin',
+    })
+  } catch (error: any) {
+    console.error('Error en PATCH /api/users/[id]:', error)
+
+    if (error.message?.includes('No autenticado') || error.message?.includes('Sesión expirada')) {
+      return NextResponse.json(
+        { error: error.message || 'No autenticado' },
+        { status: 401 }
+      )
+    }
+
+    if (error.message?.includes('No autorizado')) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+
+    return NextResponse.json(
+      { error: error.message || 'Error al actualizar el usuario' },
+      { status: 500 }
+    )
+  }
+}
+
 // DELETE - Eliminar usuario
 export async function DELETE(
   request: NextRequest,

@@ -195,7 +195,20 @@
       "deleteConfirm": "¿Eliminar este usuario? Esta acción no se puede deshacer.",
       "noUsers": "No hay usuarios registrados",
       "createSuccess": "Usuario creado exitosamente",
-      "mustChangePassword": "El usuario debe cambiar su contraseña en el primer inicio de sesión"
+      "mustChangePassword": "El usuario debe cambiar su contraseña en el primer inicio de sesión",
+      "role": "Rol",
+      "lastAccess": "Último acceso",
+      "neverAccessed": "Nunca",
+      "resetPassword": "Restablecer contraseña",
+      "newPasswordPlaceholder": "Ingresa la nueva contraseña",
+      "mustChangePasswordNote": "El usuario deberá cambiar esta contraseña en su próximo inicio de sesión",
+      "updateRoleError": "Error al actualizar el rol",
+      "resetPasswordError": "Error al restablecer la contraseña",
+      "resetPasswordSuccess": "Contraseña restablecida exitosamente.",
+      "updateError": "Error al actualizar el usuario",
+      "updateSuccess": "Usuario actualizado exitosamente.",
+      "deleteTitle": "Eliminar usuario",
+      "deleteWarning": "Esta acción no se puede deshacer."
     },
     "errors": {
       "generic": "Ha ocurrido un error",
