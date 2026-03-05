@@ -1,6 +1,6 @@
 import { createClient } from './supabase/server'
 import { redirect } from 'next/navigation'
-import { isOwner, type UserRole } from './roles'
+import { isOwner, isReportsOnly } from './roles'
 
 export async function getSession() {
   try {
@@ -70,6 +70,15 @@ export async function requireAuth() {
 export async function requireOwner() {
   const user = await requireAuth()
   if (!isOwner(user)) {
+    redirect('/app/reports')
+  }
+  return user
+}
+
+// Requerir acceso completo (owner o admin). El rol 'reports' solo puede ver reportes.
+export async function requireFullAccess() {
+  const user = await requireAuth()
+  if (isReportsOnly(user)) {
     redirect('/app/reports')
   }
   return user

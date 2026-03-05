@@ -88,9 +88,9 @@ export async function PATCH(
     const body = await request.json()
     const { role } = body
 
-    if (!role || (role !== 'owner' && role !== 'admin')) {
+    if (!role || (role !== 'owner' && role !== 'admin' && role !== 'reports')) {
       return NextResponse.json(
-        { error: 'Rol inválido. Debe ser "owner" o "admin"' },
+        { error: 'Rol inválido. Debe ser "owner", "admin" o "reports"' },
         { status: 400 }
       )
     }

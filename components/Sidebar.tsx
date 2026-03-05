@@ -16,7 +16,7 @@ export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
-  const [userRole, setUserRole] = useState<'owner' | 'admin' | null>(null)
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'reports' | null>(null)
   const [loading, setLoading] = useState(true)
   const [isExpanded, setIsExpanded] = useState(true)
 
@@ -47,8 +47,12 @@ export default function Sidebar() {
   }
 
   const filteredItems = NAVIGATION_ITEMS.filter((item: NavItem) => {
+    const fakeUser = { user_metadata: { role: userRole } }
     if (item.key === 'users') {
-      return isOwner({ user_metadata: { role: userRole } })
+      return isOwner(fakeUser)
+    }
+    if (userRole === 'reports') {
+      return item.key === 'reports'
     }
     return true
   })
