@@ -38,7 +38,11 @@ export class ClientsRepository {
       .from('clients')
       .insert({
         name: clientData.name.trim(),
+        email: clientData.email?.trim() || null,
+        phone: clientData.phone?.trim() || null,
         notes: clientData.notes?.trim() || null,
+        status: clientData.status || 'active',
+        billing_start_date: clientData.billing_start_date || null,
       })
       .select()
       .single()
@@ -49,12 +53,12 @@ export class ClientsRepository {
 
   async update(id: string, clientData: UpdateClientData): Promise<Client> {
     const updateData: SupabaseUpdateData = {}
-    if (clientData.name !== undefined) {
-      updateData.name = clientData.name.trim()
-    }
-    if (clientData.notes !== undefined) {
-      updateData.notes = clientData.notes?.trim() || null
-    }
+    if (clientData.name !== undefined) updateData.name = clientData.name.trim()
+    if (clientData.email !== undefined) updateData.email = clientData.email?.trim() || null
+    if (clientData.phone !== undefined) updateData.phone = clientData.phone?.trim() || null
+    if (clientData.notes !== undefined) updateData.notes = clientData.notes?.trim() || null
+    if (clientData.status !== undefined) updateData.status = clientData.status
+    if (clientData.billing_start_date !== undefined) updateData.billing_start_date = clientData.billing_start_date || null
 
     const { data, error } = await this.supabase
       .from('clients')
