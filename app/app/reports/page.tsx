@@ -46,7 +46,14 @@ export default function ReportsPage() {
   const [clientsData, setClientsData] = useState<StackedReportData[]>([])
   const [awsData, setAwsData] = useState<StackedReportData[]>([])
   const [loading, setLoading] = useState(false)
-  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const t = `${y}-${m}-${day}`
+    return { start: t, end: t }
+  })
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
   const supabase = useMemo(() => createClient(), [])
@@ -337,6 +344,38 @@ export default function ReportsPage() {
     return Array.from(names).sort()
   }, [data])
 
+  // Top 5 segmentos por costo total en el período
+  const top5 = useMemo(() => {
+    const totals = new Map<string, { color: string; total: number }>()
+    data.forEach(month => {
+      month.segments.forEach(seg => {
+        const ex = totals.get(seg.name)
+        if (ex) ex.total += seg.amount
+        else totals.set(seg.name, { color: seg.color, total: seg.amount })
+      })
+    })
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 5)
+      .map(([name, info]) => ({ name, color: info.color, total: info.total }))
+  }, [data])
+
+  const top5Names = useMemo(() => new Set(top5.map(t => t.name)), [top5])
+
+  const maxChartTotal = useMemo(() => {
+    return Math.max(
+      ...data.map(d =>
+        d.segments
+          .filter(s => top5Names.has(s.name))
+          .reduce((sum, s) => sum + s.amount, 0)
+      ),
+      1
+    )
+  }, [data, top5Names])
+
+  const formatChartAmount = (n: number) =>
+    n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${n.toFixed(0)}`
+
   return (
     <div>
       <div className="mb-6">
@@ -402,6 +441,7 @@ export default function ReportsPage() {
             Selecciona un rango de fechas para ver los reportes
           </p>
         )}
+
         {dateRange && loading && (
           <p className="text-center text-gray-500">Cargando...</p>
         )}
@@ -411,6 +451,94 @@ export default function ReportsPage() {
           </p>
         )}
       </div>
+
+      {/* Gráfica de barras: Top 5 costos */}
+      {data.length > 0 && top5.length > 0 && (
+        <div className="mt-6 rounded-lg bg-white p-6 shadow">
+          <h2 className="mb-1 text-lg font-semibold text-gray-900">Top 5 Costos por Mes</h2>
+          <p className="mb-6 text-sm text-gray-500">
+            Los 5 conceptos con mayor costo en el período seleccionado
+          </p>
+          <div className="flex gap-4">
+            {/* Eje Y */}
+            <div
+              className="flex flex-col justify-between text-right shrink-0"
+              style={{ height: '200px' }}
+            >
+              {[1, 0.75, 0.5, 0.25, 0].map((pct) => (
+                <span key={pct} className="text-xs text-gray-400 leading-none">
+                  {formatChartAmount(maxChartTotal * pct)}
+                </span>
+              ))}
+            </div>
+            {/* Barras + etiquetas de mes */}
+            <div className="flex-1">
+              {/* Área de barras */}
+              <div
+                className="flex items-end gap-2 border-b border-l border-gray-200"
+                style={{ height: '200px' }}
+              >
+                {data.map((monthData) => {
+                  const segs = top5.map((t) => ({
+                    name: t.name,
+                    color: t.color,
+                    amount: monthData.segments.find((s) => s.name === t.name)?.amount || 0,
+                  }))
+                  const monthSum = segs.reduce((s, x) => s + x.amount, 0)
+                  const barH = Math.round((monthSum / maxChartTotal) * 200)
+                  return (
+                    <div
+                      key={monthData.month}
+                      className="flex-1 flex items-end justify-center"
+                    >
+                      <div
+                        className="overflow-hidden rounded-t-sm"
+                        style={{ height: `${barH}px`, width: '32px' }}
+                      >
+                        {segs
+                          .filter((s) => s.amount > 0)
+                          .map((seg) => (
+                            <div
+                              key={seg.name}
+                              title={`${seg.name}: ${formatChartAmount(seg.amount)}`}
+                              style={{
+                                height: `${Math.round((seg.amount / monthSum) * barH)}px`,
+                                backgroundColor: seg.color,
+                              }}
+                            />
+                          ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Etiquetas de mes — fuera del área con borde */}
+              <div className="flex gap-2 mt-2">
+                {data.map((monthData) => (
+                  <div key={monthData.month} className="flex-1 text-center">
+                    <span className="text-xs text-gray-500">
+                      {formatMonth(monthData.month)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Leyenda */}
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+            {top5.map((seg) => (
+              <div key={seg.name} className="flex items-center gap-2">
+                <div
+                  className="h-3 w-3 rounded-sm shrink-0"
+                  style={{ backgroundColor: seg.color }}
+                />
+                <span className="text-xs text-gray-600">{seg.name}</span>
+                <span className="text-xs text-gray-400">{formatChartAmount(seg.total)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabla: clientes en filas (vertical), meses en columnas (horizontal) */}
       {data.length > 0 && (

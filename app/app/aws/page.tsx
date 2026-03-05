@@ -13,6 +13,7 @@ import {
   DateRangePicker,
   Input,
   Select,
+  Button,
 } from '@/components/ui'
 
 interface AWSReportRow {
@@ -37,6 +38,8 @@ export default function AWSPage() {
   const [reportDateRange, setReportDateRange] = useState<{ start: string; end: string } | null>(null)
   const [clientAssignments, setClientAssignments] = useState<Record<string, string>>({})
   const [clientNameFilter, setClientNameFilter] = useState<string>('')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
 
   useEffect(() => {
     loadClients()
@@ -282,6 +285,12 @@ export default function AWSPage() {
     }
   }
 
+  // Reset page when filter changes
+  const handleClientNameFilterChange = (value: string) => {
+    setClientNameFilter(value)
+    setPage(1)
+  }
+
   // Filtrar datos por nombre del cliente
   const filteredReportData = reportData.filter((row) => {
     if (!clientNameFilter) return true
@@ -338,7 +347,7 @@ export default function AWSPage() {
                 label="Filtrar por nombre del cliente"
                 type="text"
                 value={clientNameFilter}
-                onChange={(e) => setClientNameFilter(e.target.value)}
+                onChange={(e) => handleClientNameFilterChange(e.target.value)}
                 placeholder="Buscar por nombre del cliente, cuenta cloud o cliente asignado..."
               />
             </div>
@@ -384,7 +393,7 @@ export default function AWSPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredReportData.map((row, index) => (
+                  filteredReportData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((row, index) => (
                   <tr
                     key={`${row.cloudAccountNumber}-${index}`}
                     className="border-b border-gray-100"
@@ -428,6 +437,45 @@ export default function AWSPage() {
               </tfoot>
             </table>
           </div>
+          {Math.ceil(filteredReportData.length / PAGE_SIZE) > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredReportData.length)} de{' '}
+                {filteredReportData.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  {t('common.previous')}
+                </Button>
+                {Array.from({ length: Math.ceil(filteredReportData.length / PAGE_SIZE) }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
+                      p === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(Math.ceil(filteredReportData.length / PAGE_SIZE), p + 1))}
+                  disabled={page === Math.ceil(filteredReportData.length / PAGE_SIZE)}
+                >
+                  {t('common.next')}
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       ) : (
         <Card title={t('aws.noData')} className="text-center">
