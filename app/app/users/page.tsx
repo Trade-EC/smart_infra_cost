@@ -27,6 +27,7 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -414,10 +415,32 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="mb-6">
+      <div className="mb-6 flex items-center gap-4">
         <Button onClick={() => setShowCreateForm(true)}>
           {t('users.create')}
         </Button>
+        <div className="relative max-w-xs w-full">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por correo..."
+            className="w-full rounded-full border border-gray-300 px-4 py-2 pl-9 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+          />
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+            />
+          </svg>
+        </div>
       </div>
 
       {/* Modal para crear usuario */}
@@ -652,7 +675,7 @@ export default function UsersPage() {
       {/* Tabla de usuarios */}
       <Table
         columns={columns}
-        data={users}
+        data={search.trim() ? users.filter((u) => u.email.toLowerCase().includes(search.trim().toLowerCase())) : users}
         loading={loading}
         emptyMessage={t('users.noUsers')}
         keyExtractor={(user) => user.id}

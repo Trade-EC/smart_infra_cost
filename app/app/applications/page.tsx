@@ -14,7 +14,6 @@ import type { Application, Client } from '@/types'
 import {
   PageHeader,
   Card,
-  Input,
   Button,
   ErrorMessage,
   Table,
@@ -601,22 +600,58 @@ export default function ApplicationsPage() {
             />
           </div>
           <div className="flex-1 min-w-[200px]">
-            <Input
-              label={t('applications.filters.application')}
-              type="text"
-              value={applicationFilter}
-              onChange={(e) => setApplicationFilter(e.target.value)}
-              placeholder={t('common.search')}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('applications.filters.application')}
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={applicationFilter}
+                onChange={(e) => setApplicationFilter(e.target.value)}
+                placeholder={t('common.search')}
+                className="w-full rounded-full border border-gray-300 px-4 py-2 pl-9 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+                />
+              </svg>
+            </div>
           </div>
           <div className="flex-1 min-w-[200px]">
-            <Input
-              label={t('applications.filters.client')}
-              type="text"
-              value={clientFilter}
-              onChange={(e) => setClientFilter(e.target.value)}
-              placeholder={t('common.search')}
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {t('applications.filters.client')}
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={clientFilter}
+                onChange={(e) => setClientFilter(e.target.value)}
+                placeholder={t('common.search')}
+                className="w-full rounded-full border border-gray-300 px-4 py-2 pl-9 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+              />
+              <svg
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"
+                />
+              </svg>
+            </div>
           </div>
         </div>
       </Card>
