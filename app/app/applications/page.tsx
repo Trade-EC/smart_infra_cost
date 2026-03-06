@@ -40,6 +40,8 @@ export default function ApplicationsPage() {
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('')
   const [applicationFilter, setApplicationFilter] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
   const [editingApp, setEditingApp] = useState<string | null>(null)
   const [clientSelectors, setClientSelectors] = useState<
     Record<string, string[]>
@@ -94,6 +96,7 @@ export default function ApplicationsPage() {
       }
       
       setApplications(filteredData)
+      setPage(1)
     } catch (err: any) {
       setError(err.message || t('applications.loadError'))
     } finally {
@@ -843,13 +846,54 @@ export default function ApplicationsPage() {
           </div>
         </Card>
       ) : (
-        <Table
-          columns={columns}
-          data={applications}
-          loading={loading}
-          emptyMessage={t('applications.noApplications')}
-          keyExtractor={(app) => app.id}
-        />
+        <>
+          <Table
+            columns={columns}
+            data={applications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+            loading={loading}
+            emptyMessage={t('applications.noApplications')}
+            keyExtractor={(app) => app.id}
+          />
+          {Math.ceil(applications.length / PAGE_SIZE) > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, applications.length)} de{' '}
+                {applications.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  {t('common.previous')}
+                </Button>
+                {Array.from({ length: Math.ceil(applications.length / PAGE_SIZE) }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
+                      p === page
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(Math.ceil(applications.length / PAGE_SIZE), p + 1))}
+                  disabled={page === Math.ceil(applications.length / PAGE_SIZE)}
+                >
+                  {t('common.next')}
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

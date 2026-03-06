@@ -41,6 +41,8 @@ export default function TransactionsPage() {
   const [priceConfigsSaving, setPriceConfigsSaving] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingMonth, setEditingMonth] = useState('')
   const [editingQuantity, setEditingQuantity] = useState('')
@@ -125,6 +127,7 @@ export default function TransactionsPage() {
       setLoading(true)
       const data = await transactionsRepo.getByDateRange(dateRange.start, dateRange.end)
       setTransactions(data)
+      setPage(1)
     } catch (err: any) {
       setError(err.message || t('transactions.loadError'))
     } finally {
@@ -785,11 +788,50 @@ export default function TransactionsPage() {
             <h2 className="mb-4 text-xl font-bold text-gray-900">Historial de transacciones</h2>
             <Table
               columns={columns}
-              data={transactions}
+              data={transactions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
               loading={loading}
               emptyMessage="No hay transacciones registradas en el rango seleccionado"
               keyExtractor={(transaction) => transaction.id}
             />
+            {Math.ceil(transactions.length / PAGE_SIZE) > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} de{' '}
+                  {transactions.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    {t('common.previous')}
+                  </Button>
+                  {Array.from({ length: Math.ceil(transactions.length / PAGE_SIZE) }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`h-8 w-8 rounded-full text-sm font-medium transition-colors ${
+                        p === page
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setPage((p) => Math.min(Math.ceil(transactions.length / PAGE_SIZE), p + 1))}
+                    disabled={page === Math.ceil(transactions.length / PAGE_SIZE)}
+                  >
+                    {t('common.next')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg bg-white p-6 shadow">

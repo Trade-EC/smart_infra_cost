@@ -2,18 +2,30 @@
 export interface Client {
   id: string
   name: string
+  email: string | null
+  phone: string | null
   notes: string | null
+  status: 'active' | 'inactive'
+  billing_start_date: string | null
   created_at: string
 }
 
 export interface CreateClientData {
   name: string
+  email?: string | null
+  phone?: string | null
   notes?: string | null
+  status?: 'active' | 'inactive'
+  billing_start_date?: string | null
 }
 
 export interface UpdateClientData {
   name?: string
+  email?: string | null
+  phone?: string | null
   notes?: string | null
+  status?: 'active' | 'inactive'
+  billing_start_date?: string | null
 }
 
 // Application types
@@ -169,5 +181,9 @@ export interface SupabaseApplicationClientRelation {
 
 export interface SupabaseUpdateData {
   name?: string
+  email?: string | null
+  phone?: string | null
   notes?: string | null
+  status?: 'active' | 'inactive'
+  billing_start_date?: string | null
 }
