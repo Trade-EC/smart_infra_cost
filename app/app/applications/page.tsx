@@ -476,6 +476,8 @@ export default function ApplicationsPage() {
                             })
                             .map((client) => ({ value: client.id, label: client.name }))}
                           placeholder="Seleccione un Cliente"
+                          searchable
+                          clearLabel="Sin cliente"
                         />
                       </div>
                       {!isLastEmpty && (
@@ -609,6 +611,7 @@ export default function ApplicationsPage() {
               onChange={setSelectedClientFilter}
               options={clients.map((c) => ({ value: c.id, label: c.name }))}
               placeholder="Todos los clientes"
+              searchable
             />
           </div>
           <div className="flex-1 min-w-[200px]">
@@ -716,6 +719,8 @@ export default function ApplicationsPage() {
                             label: client.name,
                           }))}
                           placeholder="Seleccionar cliente"
+                          searchable
+                          clearLabel="Sin cliente"
                         />
                       </div>
                       <div className="w-32">

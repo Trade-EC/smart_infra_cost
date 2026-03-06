@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ClientsRepository, AWSReportsRepository } from '@/lib/repositories'
 import type { Client } from '@/types'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
+import toast from 'react-hot-toast'
 import {
   PageHeader,
   Card,
@@ -217,6 +218,7 @@ export default function AWSPage() {
       await loadAWSReports()
       setClientAssignments({})
       e.target.value = ''
+      toast.success(`${processedData.length} registros cargados correctamente`)
     } catch (err: any) {
       setError(err.message || t('aws.uploadError'))
       console.error('Error al procesar CSV:', err)
@@ -331,6 +333,14 @@ export default function AWSPage() {
               disabled={uploading || !reportDateRange}
               className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
             />
+            {!reportDateRange && (
+              <p className="mt-2 flex items-center gap-1 text-xs text-amber-600">
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                Selecciona un rango de fechas antes de subir el CSV
+              </p>
+            )}
             {uploading && (
               <p className="mt-2 text-sm text-gray-600">{t('aws.uploading')}</p>
             )}

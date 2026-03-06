@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { createClient } from '@/lib/supabase/client'
 import {
   ApplicationsRepository,
@@ -186,6 +188,113 @@ export default function CostsPage() {
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
 
+  const handleDownloadPDF = () => {
+    if (!selectedClient || !dateRange) return
+
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.getWidth()
+
+    // Header
+    doc.setFontSize(18)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Reporte de Costos', pageWidth / 2, 18, { align: 'center' })
+
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Cliente: ${selectedClient.name}`, 14, 28)
+    doc.text(
+      `Período: ${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`,
+      14,
+      35,
+    )
+
+    let y = 44
+
+    // Transactions table
+    if (transactions.length > 0) {
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Transacciones', 14, y)
+      y += 4
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Mes', 'Cantidad', 'Precio por Transacción', 'Costo Asignado']],
+        body: transactions.map((t) => [
+          formatMonth(t.month),
+          t.quantity,
+          `$${t.cost_per_transaction.toFixed(2)}`,
+          `$${t.assigned_cost.toFixed(2)}`,
+        ]),
+        foot: [['', '', 'Total Transacciones:', `$${transactionsTotal.toFixed(2)}`]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 10
+    }
+
+    // Applications table
+    if (applications.length > 0) {
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Aplicaciones', 14, y)
+      y += 4
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Fecha', 'Aplicación', 'Responsable', 'Costo']],
+        body: applications.map((a) => [
+          formatDate(a.date),
+          a.name,
+          a.responsable,
+          `$${a.price.toFixed(2)}`,
+        ]),
+        foot: [['', '', 'Total Aplicaciones:', `$${applicationsTotal.toFixed(2)}`]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 10
+    }
+
+    // AWS table
+    if (awsReports.length > 0) {
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('AWS', 14, y)
+      y += 4
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Fecha', 'Cuenta Cloud', 'Cliente (CSV)', 'Costo']],
+        body: awsReports.map((r) => [
+          formatDate(r.date),
+          r.cloud_account_number,
+          r.customer_name,
+          `$${r.seller_cost.toFixed(2)}`,
+        ]),
+        foot: [['', '', 'Total AWS:', `$${awsTotal.toFixed(2)}`]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 10
+    }
+
+    // Grand total
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(59, 130, 246)
+    doc.text(`Total General: $${grandTotal.toFixed(2)}`, pageWidth - 14, y, { align: 'right' })
+
+    const fileName = `costos_${selectedClient.name.replace(/\s+/g, '_')}_${dateRange.start}_${dateRange.end}.pdf`
+    doc.save(fileName)
+  }
+
   return (
     <div>
       <PageHeader title={t('costs.title')} />
@@ -216,6 +325,8 @@ export default function CostsPage() {
               onChange={setSelectedClientId}
               options={clients.map(c => ({ value: c.id, label: c.name }))}
               placeholder="Seleccionar cliente"
+              searchable
+              clearLabel="Sin selección"
             />
           </div>
         </div>
@@ -422,11 +533,23 @@ export default function CostsPage() {
                   Período: {dateRange ? `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}` : ''}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-700 mb-1">Total General</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  ${grandTotal.toFixed(2)}
-                </p>
+              <div className="flex items-center gap-6">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Total General</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    ${grandTotal.toFixed(2)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadPDF}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Descargar PDF
+                </button>
               </div>
             </div>
           </div>
