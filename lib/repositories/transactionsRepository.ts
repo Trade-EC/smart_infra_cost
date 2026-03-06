@@ -126,8 +126,11 @@ export class TransactionsRepository {
     }
     if (data.description !== undefined) updateData.description = data.description || null
     
-    // Recalcular total si quantity o costPerTransaction cambian
-    if (data.quantity !== undefined || data.costPerTransaction !== undefined) {
+    // Recalcular total si quantity y costPerTransaction están ambos presentes (evita query extra)
+    if (data.quantity !== undefined && data.costPerTransaction !== undefined) {
+      updateData.total_cost = data.quantity * data.costPerTransaction
+    } else if (data.quantity !== undefined || data.costPerTransaction !== undefined) {
+      // Solo uno de los dos fue pasado: necesitamos el valor actual del otro
       const current = await this.getById(id)
       if (current) {
         const qty = data.quantity !== undefined ? data.quantity : current.quantity

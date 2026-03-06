@@ -174,6 +174,15 @@ export class ApplicationsRepository {
     if (error) throw error
   }
 
+  async removeAllClients(applicationId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('application_clients')
+      .delete()
+      .eq('application_id', applicationId)
+
+    if (error) throw error
+  }
+
   async checkDuplicate(
     name: string,
     date: string,
@@ -191,6 +200,34 @@ export class ApplicationsRepository {
 
     if (error) throw error
     return (data?.length || 0) > 0
+  }
+
+  /**
+   * Verifica duplicados en batch (1 query en lugar de N).
+   * Retorna un Set de claves "name|date|price|responsable" ya existentes en la BD.
+   */
+  async batchCheckDuplicates(
+    items: Array<{ name: string; date: string; price: number; responsable: string }>
+  ): Promise<Set<string>> {
+    if (items.length === 0) return new Set()
+
+    const names = [...new Set(items.map((i) => i.name.trim()))]
+    const dates = [...new Set(items.map((i) => i.date))]
+
+    const { data, error } = await this.supabase
+      .from('applications')
+      .select('name, date, price, responsable')
+      .in('name', names)
+      .in('date', dates)
+
+    if (error) throw error
+
+    return new Set(
+      (data || []).map(
+        (r: any) =>
+          `${r.name.trim()}|${r.date}|${Math.abs(r.price)}|${r.responsable.trim()}`
+      )
+    )
   }
 
   async delete(id: string): Promise<void> {
