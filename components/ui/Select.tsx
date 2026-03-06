@@ -14,6 +14,8 @@ interface SelectProps {
   options: SelectOption[]
   placeholder?: string
   className?: string
+  searchable?: boolean
+  clearLabel?: string
 }
 
 export default function Select({
@@ -22,21 +24,20 @@ export default function Select({
   options,
   placeholder = 'Seleccionar...',
   className = '',
+  searchable = false,
+  clearLabel = 'Todos los clientes',
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 })
   const selectRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  // Calcula dónde debe aparecer el menú en la pantalla (viewport para position: fixed)
   const updateCoords = () => {
     if (selectRef.current) {
       const rect = selectRef.current.getBoundingClientRect()
-      setCoords({
-        top: rect.bottom,
-        left: rect.left,
-        width: rect.width,
-      })
+      setCoords({ top: rect.bottom, left: rect.left, width: rect.width })
     }
   }
 
@@ -45,6 +46,9 @@ export default function Select({
       updateCoords()
       window.addEventListener('scroll', updateCoords, true)
       window.addEventListener('resize', updateCoords)
+      if (searchable) setTimeout(() => inputRef.current?.focus(), 0)
+    } else {
+      setSearchText('')
     }
     return () => {
       window.removeEventListener('scroll', updateCoords, true)
@@ -69,6 +73,16 @@ export default function Select({
 
   const selectedOption = options.find(opt => opt.value === value)
 
+  const filteredOptions = searchable && searchText
+    ? options.filter(opt => opt.label.toLowerCase().includes(searchText.toLowerCase()))
+    : options
+
+  const handleSelect = (val: string) => {
+    onChange(val)
+    setIsOpen(false)
+    setSearchText('')
+  }
+
   return (
     <div className={`relative ${className}`} ref={selectRef}>
       <button
@@ -84,31 +98,48 @@ export default function Select({
         </svg>
       </button>
 
-      {/* El Portal: Esto hace que el menú sea inmune a los recortes de la tabla */}
       {isOpen && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-[9999] mt-1 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 max-h-60 overflow-auto"
+          className="fixed z-[9999] mt-1 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
           style={{ top: coords.top, left: coords.left, width: coords.width }}
         >
-          <div className="py-1">
-            <button
-              type="button"
-              onClick={() => { onChange(''); setIsOpen(false); }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              Todos los clientes
-            </button>
-            {options.map((option) => (
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
+              <input
+                ref={inputRef}
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Buscar..."
+                className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          )}
+          <div className="max-h-56 overflow-auto py-1">
+            {!searchText && (
               <button
-                key={option.value}
                 type="button"
-                onClick={() => { onChange(option.value); setIsOpen(false); }}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${value === option.value ? 'bg-blue-50 text-blue-600' : 'text-gray-900'}`}
+                onClick={() => handleSelect('')}
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
-                {option.label}
+                {clearLabel}
               </button>
-            ))}
+            )}
+            {filteredOptions.length === 0 ? (
+              <p className="px-4 py-2 text-sm text-gray-400">Sin resultados</p>
+            ) : (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${value === option.value ? 'bg-blue-50 text-blue-600' : 'text-gray-900'}`}
+                >
+                  {option.label}
+                </button>
+              ))
+            )}
           </div>
         </div>,
         document.body

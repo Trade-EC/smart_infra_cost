@@ -397,6 +397,7 @@ export default function ReportsPage() {
                 onChange={setSelectedClientId}
                 options={clients.map(c => ({ value: c.id, label: c.name }))}
                 placeholder="Todos los clientes"
+                searchable
               />
             </div>
           )}

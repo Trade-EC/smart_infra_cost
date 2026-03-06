@@ -15,6 +15,7 @@ import {
   Table,
   DateRangePicker,
 } from '@/components/ui'
+import Select from '@/components/ui/Select'
 
 export default function TransactionsPage() {
   const { t } = useTranslation()
@@ -712,18 +713,14 @@ export default function TransactionsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Cliente
             </label>
-            <select
+            <Select
               value={selectedClientId}
-              onChange={(e) => setSelectedClientId(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
-            >
-              <option value="">Seleccionar Cliente</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedClientId}
+              options={clients.map((c) => ({ value: c.id, label: c.name }))}
+              placeholder="Seleccionar Cliente"
+              clearLabel="Sin cliente"
+              searchable
+            />
           </div>
 
           <div className="flex-1 min-w-[150px]">
@@ -862,25 +859,24 @@ export default function TransactionsPage() {
                   key={row.clientId || rowIndex}
                   className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 p-3"
                 >
-                  <div className="w-[160px]">
+                  <div className="w-[200px]">
                     <label className="mb-1 block text-xs font-medium text-gray-700">
                       Cliente
                     </label>
-                    <select
-                      value={row.clientId}
-                      onChange={(e) => handleChangeClientId(rowIndex, e.target.value)}
-                      disabled={isDisabled}
-                      className={`w-full rounded-md border border-gray-300 px-2 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 ${
-                        isDisabled ? 'bg-gray-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <option value="">Seleccionar cliente</option>
-                      {clients.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.name}
-                        </option>
-                      ))}
-                    </select>
+                    {isDisabled ? (
+                      <div className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-not-allowed truncate">
+                        {clients.find((c) => c.id === row.clientId)?.name || 'Sin cliente'}
+                      </div>
+                    ) : (
+                      <Select
+                        value={row.clientId}
+                        onChange={(val) => handleChangeClientId(rowIndex, val)}
+                        options={clients.map((client) => ({ value: client.id, label: client.name }))}
+                        placeholder="Seleccionar cliente"
+                        clearLabel="Sin cliente"
+                        searchable
+                      />
+                    )}
                   </div>
 
                   {/* Rango 1 */}

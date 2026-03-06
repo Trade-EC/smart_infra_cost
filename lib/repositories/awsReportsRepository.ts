@@ -37,7 +37,11 @@ export class AWSReportsRepository {
       .lte('date', endDateFormatted)
       .order('cloud_account_number', { ascending: true })
 
-    if (error) throw error
+    if (error) {
+      throw new Error(
+        error.message || error.details || `Error Supabase [${error.code}]`
+      )
+    }
     return data || []
   }
 
@@ -58,7 +62,11 @@ export class AWSReportsRepository {
       .lte('date', endDateFormatted)
       .order('cloud_account_number', { ascending: true })
 
-    if (error) throw error
+    if (error) {
+      throw new Error(
+        error.message || error.details || `Error Supabase [${error.code}]`
+      )
+    }
     return data || []
   }
 
@@ -74,16 +82,33 @@ export class AWSReportsRepository {
       created_by: user?.user?.id || null,
     }))
 
-    // Usar upsert para evitar duplicados (basado en UNIQUE constraint)
+    // Eliminar registros existentes para las mismas fechas antes de insertar
+    const dates = [...new Set(reportsToInsert.map((r) => r.date))]
+    const { error: deleteError } = await this.supabase
+      .from('aws_reports')
+      .delete()
+      .in('date', dates)
+
+    if (deleteError) {
+      throw new Error(
+        deleteError.message ||
+          deleteError.details ||
+          `Error Supabase [${deleteError.code}]`
+      )
+    }
+
     const { data, error } = await this.supabase
       .from('aws_reports')
-      .upsert(reportsToInsert, {
-        onConflict: 'cloud_account_number,date',
-        ignoreDuplicates: false,
-      })
+      .insert(reportsToInsert)
       .select()
 
-    if (error) throw error
+    if (error) {
+      throw new Error(
+        error.message ||
+          error.details ||
+          `Error Supabase [${error.code}]`
+      )
+    }
     return data || []
   }
 
@@ -105,7 +130,9 @@ export class AWSReportsRepository {
       if (error.code === 'PGRST116') {
         return null
       }
-      throw error
+      throw new Error(
+        error.message || error.details || `Error Supabase [${error.code}]`
+      )
     }
     return data
   }
