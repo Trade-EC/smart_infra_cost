@@ -115,17 +115,8 @@ export default function ApplicationsPage() {
         return
       }
 
-      // Eliminar todas las asignaciones actuales
-      const currentApp = applications.find((a) => a.id === appId)
-      if (currentApp?.clients) {
-        for (const client of currentApp.clients) {
-          try {
-            await applicationsRepo.removeClient(appId, client.id)
-          } catch (err) {
-            // Ignore errors if relationship doesn't exist
-          }
-        }
-      }
+      // Eliminar todas las asignaciones actuales en una sola query
+      await applicationsRepo.removeAllClients(appId)
 
       // Crear nuevas asignaciones
       for (const clientId of clientIds) {
@@ -396,19 +387,14 @@ export default function ApplicationsPage() {
         throw new Error('No se encontraron aplicaciones válidas en el CSV')
       }
 
-      // Verificar duplicados
-      const newApplications: typeof applicationsToInsert = []
-      for (const app of applicationsToInsert) {
-        const isDuplicate = await applicationsRepo.checkDuplicate(
-          app.name,
-          app.date,
-          app.price,
-          app.responsable
-        )
-        if (!isDuplicate) {
-          newApplications.push(app)
-        }
-      }
+      // Verificar duplicados en 1 sola query batch
+      const existingKeys = await applicationsRepo.batchCheckDuplicates(applicationsToInsert)
+      const newApplications = applicationsToInsert.filter(
+        (app) =>
+          !existingKeys.has(
+            `${app.name.trim()}|${app.date}|${Math.abs(app.price)}|${app.responsable.trim()}`
+          )
+      )
 
       const duplicatesCount = applicationsToInsert.length - newApplications.length
 

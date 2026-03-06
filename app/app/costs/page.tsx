@@ -74,27 +74,31 @@ export default function CostsPage() {
     setError(null)
 
     try {
-      // Cargar transacciones
-      const transactionsData = await transactionsRepo.getByClientAndDateRange(
-        selectedClientId,
-        dateRange.start,
-        dateRange.end
-      )
+      // Todas las queries son independientes — se ejecutan en paralelo
+      const [transactionsData, allApplications, distributions, awsReportsData] =
+        await Promise.all([
+          transactionsRepo.getByClientAndDateRange(
+            selectedClientId,
+            dateRange.start,
+            dateRange.end
+          ),
+          applicationsRepo.getAll({
+            dateFrom: dateRange.start,
+            dateTo: dateRange.end,
+          }),
+          distributionsRepo.getByClientAndDateRange(
+            selectedClientId,
+            dateRange.start,
+            dateRange.end
+          ),
+          awsReportsRepo.getByClientAndDateRange(
+            selectedClientId,
+            dateRange.start,
+            dateRange.end
+          ),
+        ])
+
       setTransactions(transactionsData)
-
-      // Cargar aplicaciones con distribuciones
-      // Primero obtener todas las aplicaciones en el rango de fechas
-      const allApplications = await applicationsRepo.getAll({
-        dateFrom: dateRange.start,
-        dateTo: dateRange.end,
-      })
-
-      // Obtener distribuciones para el cliente seleccionado
-      const distributions = await distributionsRepo.getByClientAndDateRange(
-        selectedClientId,
-        dateRange.start,
-        dateRange.end
-      )
 
       // Filtrar aplicaciones que tienen el cliente asignado directamente o a través de distribuciones
       const applicationsWithClient = allApplications.filter((app) => {
@@ -124,13 +128,6 @@ export default function CostsPage() {
       })
 
       setApplications(applicationsData)
-
-      // Cargar reportes AWS
-      const awsReportsData = await awsReportsRepo.getByClientAndDateRange(
-        selectedClientId,
-        dateRange.start,
-        dateRange.end
-      )
       setAwsReports(awsReportsData)
     } catch (err: any) {
       setError(err.message || 'Error al cargar los costos')
