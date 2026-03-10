@@ -82,6 +82,7 @@ export default function TarifasPage() {
   const [filterActiva, setFilterActiva] = useState<'all' | 'active' | 'inactive'>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
 
   useEffect(() => {
     Promise.all([loadTarifas(), loadClients()])
@@ -131,6 +132,7 @@ export default function TarifasPage() {
         fechaInicio: form.fechaInicio,
       })
       setForm(emptyForm)
+      setShowForm(false)
       await loadTarifas()
       toast.success('Tarifa creada correctamente')
     } catch (err: any) {
@@ -187,12 +189,19 @@ export default function TarifasPage() {
 
   return (
     <div>
-      <PageHeader title="Tarifas" />
+      <PageHeader
+        title="Tarifas"
+        actions={
+          <Button variant="primary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Cancelar' : 'Crear Tarifa'}
+          </Button>
+        }
+      />
 
       <ErrorMessage message={error || ''} className="mb-4" />
 
       {/* Formulario nueva tarifa */}
-      <Card title="Nueva Tarifa" className="mb-6">
+      {showForm && <Card title="Nueva Tarifa" className="mb-6">
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
@@ -280,7 +289,7 @@ export default function TarifasPage() {
             </Button>
           </div>
         </form>
-      </Card>
+      </Card>}
 
       {/* Filtros */}
       <Card title="Filtros" className="mb-6">

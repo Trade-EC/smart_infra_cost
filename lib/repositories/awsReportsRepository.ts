@@ -50,22 +50,33 @@ export class AWSReportsRepository {
     startDate: string,
     endDate: string
   ): Promise<AWSReport[]> {
-    // Asegurar que las fechas estén en formato YYYY-MM-DD sin problemas de zona horaria
     const startDateFormatted = startDate.split('T')[0]
     const endDateFormatted = endDate.split('T')[0]
-    
+
+    // Query via pivot table aws_report_clients
+    const { data: clientRows, error: clientError } = await this.supabase
+      .from('aws_report_clients')
+      .select('aws_report_id')
+      .eq('client_id', clientId)
+
+    if (clientError) {
+      throw new Error(clientError.message || clientError.details || `Error Supabase [${clientError.code}]`)
+    }
+
+    if (!clientRows || clientRows.length === 0) return []
+
+    const reportIds = clientRows.map((r: any) => r.aws_report_id)
+
     const { data, error } = await this.supabase
       .from('aws_reports')
       .select('*')
-      .eq('client_id', clientId)
+      .in('id', reportIds)
       .gte('date', startDateFormatted)
       .lte('date', endDateFormatted)
       .order('cloud_account_number', { ascending: true })
 
     if (error) {
-      throw new Error(
-        error.message || error.details || `Error Supabase [${error.code}]`
-      )
+      throw new Error(error.message || error.details || `Error Supabase [${error.code}]`)
     }
     return data || []
   }

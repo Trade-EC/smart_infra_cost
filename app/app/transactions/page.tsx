@@ -842,11 +842,23 @@ export default function TransactionsPage() {
 
       {activeTab === 'prices' && (
         <div className="rounded-lg bg-white p-6 shadow">
-          <h2 className="mb-2 text-lg font-semibold text-gray-900">Precios por cliente</h2>
-          <p className="mb-4 text-sm text-gray-600">
-            Configura reglas de precio por rango de transacciones para cada cliente. Puedes agregar
-            solo los clientes y rangos que necesites.
-          </p>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Precios por cliente</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Configura reglas de precio por rango de transacciones para cada cliente. Puedes agregar
+                solo los clientes y rangos que necesites.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddPriceRow}
+              className="flex items-center gap-2 rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
+            >
+              <span>+</span>
+              Agregar regla de precio
+            </button>
+          </div>
 
           <div className="space-y-3">
             {priceRows.map((row, rowIndex) => {
@@ -1049,14 +1061,6 @@ export default function TransactionsPage() {
               </p>
             )}
 
-            <button
-              type="button"
-              onClick={handleAddPriceRow}
-              className="flex items-center gap-2 rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-            >
-              <span>+</span>
-              Agregar regla de precio
-            </button>
           </div>
         </div>
       )}
