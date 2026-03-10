@@ -183,12 +183,12 @@
       "uploading": "Procesando CSV...",
       "customerName": "Nombre del Cliente",
       "cloudAccountNumber": "Número de Cuenta Cloud",
-      "sellerCost": "Costo del Vendedor (USD)",
+      "sellerCost": "Costo de Cliente (USD)",
       "totalCost": "Costo Total",
       "uploadError": "Error al procesar el CSV",
       "csvUploaded": "CSV procesado exitosamente",
       "noData": "No hay datos para mostrar",
-      "csvFormat": "El CSV debe tener las columnas: Customer Name, Cloud Account Number, Seller Cost (USD)"
+      "csvFormat": "El CSV debe tener las columnas: Customer Name, Cloud Account Number, Customer Cost (USD)"
     },
     "users": {
       "title": "Usuarios",
