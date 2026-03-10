@@ -84,14 +84,16 @@ export class AWSReportsRepository {
   async createMany(reports: CreateAWSReportData[]): Promise<AWSReport[]> {
     const { data: user } = await this.supabase.auth.getUser()
 
-    const reportsToInsert = reports.map((report) => ({
-      customer_name: report.customerName,
-      cloud_account_number: report.cloudAccountNumber,
-      seller_cost: report.sellerCost,
-      client_id: report.clientId || null,
-      date: report.date,
-      created_by: user?.user?.id || null,
-    }))
+    const reportsToInsert = reports
+      .filter((report) => report.sellerCost >= 0.01)
+      .map((report) => ({
+        customer_name: report.customerName,
+        cloud_account_number: report.cloudAccountNumber,
+        seller_cost: report.sellerCost,
+        client_id: report.clientId || null,
+        date: report.date,
+        created_by: user?.user?.id || null,
+      }))
 
     // Eliminar registros existentes para las mismas fechas antes de insertar
     const dates = [...new Set(reportsToInsert.map((r) => r.date))]

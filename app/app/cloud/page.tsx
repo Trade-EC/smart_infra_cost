@@ -215,6 +215,7 @@ function AWSTab({ clients }: { clients: Client[] }) {
           clientIds: [],
           date: dateRange.start,
         }))
+        .filter((row) => row.sellerCost >= 0.01)
         .sort((a, b) => a.cloudAccountNumber.localeCompare(b.cloudAccountNumber))
 
       if (processedData.length === 0) throw new Error('No se encontraron datos válidos en el CSV')
@@ -700,6 +701,7 @@ function GCPTab({ clients }: { clients: Client[] }) {
           clientIds: [],
           date: dateRange.start,
         }))
+        .filter((row) => row.cost >= 0.01)
         .sort((a, b) => a.projectId.localeCompare(b.projectId))
 
       if (processedData.length === 0) throw new Error('No se encontraron datos válidos en el CSV')
