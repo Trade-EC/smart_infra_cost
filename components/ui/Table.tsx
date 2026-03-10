@@ -2,7 +2,7 @@ import React from 'react'
 
 interface TableColumn<T> {
   key: keyof T | string
-  header: string
+  header: React.ReactNode
   render?: (item: T) => React.ReactNode
   className?: string
 }

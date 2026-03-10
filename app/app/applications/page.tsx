@@ -8,7 +8,7 @@ import {
   ClientsRepository,
   ApplicationCostDistributionsRepository,
 } from '@/lib/repositories'
-import type { ApplicationCostDistribution } from '@/lib/repositories/applicationCostDistributionsRepository'
+
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client } from '@/types'
 import {
@@ -38,6 +38,7 @@ export default function ApplicationsPage() {
   const [clientFilter, setClientFilter] = useState('')
   const [selectedClientFilter, setSelectedClientFilter] = useState<string>('')
   const [applicationFilter, setApplicationFilter] = useState('')
+  const [showUnassignedOnly, setShowUnassignedOnly] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
@@ -48,6 +49,13 @@ export default function ApplicationsPage() {
   const [distributingApp, setDistributingApp] = useState<Application | null>(null)
   const [distributionRows, setDistributionRows] = useState<Array<{ clientId: string; percentage: number | '' | string }>>([])
   const [savingDistribution, setSavingDistribution] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [showNewAppModal, setShowNewAppModal] = useState(false)
+  const [newAppForm, setNewAppForm] = useState({ nombre: '', responsable: '', precio: '', fecha: '' })
+  const [savingNewApp, setSavingNewApp] = useState(false)
+  const [selectedAppIds, setSelectedAppIds] = useState<Set<string>>(new Set())
+  const [bulkClientId, setBulkClientId] = useState<string>('')
+  const [bulkAssigning, setBulkAssigning] = useState(false)
 
   const TODOS_CLIENT_ID = 'abe57007-076c-492a-84da-0e5d075af2f9'
 
@@ -64,7 +72,7 @@ export default function ApplicationsPage() {
       setApplications([])
       setLoading(false)
     }
-  }, [dateRange, clientFilter, selectedClientFilter, applicationFilter])
+  }, [dateRange, clientFilter, selectedClientFilter, applicationFilter, showUnassignedOnly])
 
   const loadClients = async () => {
     try {
@@ -86,14 +94,18 @@ export default function ApplicationsPage() {
         applicationFilter,
       })
       
-      // Filtrar por cliente seleccionado si hay uno
       let filteredData = data
       if (selectedClientFilter) {
-        filteredData = data.filter((app) =>
+        filteredData = filteredData.filter((app) =>
           app.clients?.some((c) => c.id === selectedClientFilter)
         )
       }
-      
+      if (showUnassignedOnly) {
+        filteredData = filteredData.filter(
+          (app) => !app.clients || app.clients.length === 0
+        )
+      }
+
       setApplications(filteredData)
       setPage(1)
     } catch (err: any) {
@@ -186,11 +198,11 @@ export default function ApplicationsPage() {
   const handleOpenDistributionModal = async (app: Application) => {
     try {
       setDistributingApp(app)
-      setError(null)
-      
+      setModalError(null)
+
       // Cargar distribuciones existentes
       const existingDistributions = await distributionsRepo.getByApplication(app.id)
-      
+
       if (existingDistributions.length > 0) {
         setDistributionRows(
           existingDistributions.map((dist) => ({
@@ -203,7 +215,7 @@ export default function ApplicationsPage() {
         setDistributionRows([{ clientId: '', percentage: '' }])
       }
     } catch (err: any) {
-      setError(err.message || 'Error al cargar las distribuciones')
+      setModalError(err.message || 'Error al cargar las distribuciones')
     }
   }
 
@@ -221,6 +233,33 @@ export default function ApplicationsPage() {
     setDistributionRows(updated)
   }
 
+  const handleSaveNewApp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newAppForm.nombre.trim()) { setError('El nombre es requerido'); return }
+    if (!newAppForm.fecha) { setError('La fecha es requerida'); return }
+    const precio = parseFloat(newAppForm.precio)
+    if (!newAppForm.precio || isNaN(precio) || precio < 0) { setError('El precio debe ser un número válido'); return }
+
+    setSavingNewApp(true)
+    setError(null)
+    try {
+      await applicationsRepo.create({
+        name: newAppForm.nombre.trim(),
+        responsable: newAppForm.responsable.trim() || 'Sin asignar',
+        price: precio,
+        date: newAppForm.fecha,
+      })
+      setShowNewAppModal(false)
+      setNewAppForm({ nombre: '', responsable: '', precio: '', fecha: '' })
+      await loadApplications()
+      toast.success('Aplicación creada correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al crear la aplicación')
+    } finally {
+      setSavingNewApp(false)
+    }
+  }
+
   const handleSaveDistribution = async () => {
     if (!distributingApp) return
 
@@ -230,14 +269,14 @@ export default function ApplicationsPage() {
     )
     
     if (incompleteRows) {
-      setError('Todos los clientes deben estar seleccionados y los porcentajes deben ser mayores a 0 y menores o iguales a 100')
+      setModalError('Todos los clientes deben estar seleccionados y los porcentajes deben ser mayores a 0 y menores o iguales a 100')
       return
     }
 
     // Validar que la suma de porcentajes sea 100
     const totalPercentage = distributionRows.reduce((sum, row) => sum + (typeof row.percentage === 'number' ? row.percentage : 0), 0)
     if (Math.abs(totalPercentage - 100) > 0.01) {
-      setError(`La suma de los porcentajes debe ser 100%. Actual: ${totalPercentage.toFixed(2)}%`)
+      setModalError(`La suma de los porcentajes debe ser 100%. Actual: ${totalPercentage.toFixed(2)}%`)
       return
     }
 
@@ -245,12 +284,12 @@ export default function ApplicationsPage() {
     const clientIds = distributionRows.map((row) => row.clientId)
     const uniqueClientIds = new Set(clientIds)
     if (clientIds.length !== uniqueClientIds.size) {
-      setError('No puedes asignar el mismo cliente más de una vez')
+      setModalError('No puedes asignar el mismo cliente más de una vez')
       return
     }
 
     setSavingDistribution(true)
-    setError(null)
+    setModalError(null)
 
     try {
       // Eliminar distribuciones existentes
@@ -268,15 +307,35 @@ export default function ApplicationsPage() {
       })
 
       await distributionsRepo.createOrUpdateMany(distributions)
-      
+
       toast.success('Distribución de costos guardada exitosamente')
       setDistributingApp(null)
       setDistributionRows([])
+      setModalError(null)
       await loadApplications()
     } catch (err: any) {
-      setError(err.message || 'Error al guardar la distribución')
+      setModalError(err.message || 'Error al guardar la distribución')
     } finally {
       setSavingDistribution(false)
+    }
+  }
+
+  const handleBulkAssign = async () => {
+    if (!bulkClientId || selectedAppIds.size === 0) return
+    setBulkAssigning(true)
+    try {
+      for (const appId of selectedAppIds) {
+        await applicationsRepo.removeAllClients(appId)
+        await applicationsRepo.assignClient(appId, bulkClientId)
+      }
+      toast.success(`Cliente asignado a ${selectedAppIds.size} aplicaciones`)
+      setSelectedAppIds(new Set())
+      setBulkClientId('')
+      await loadApplications()
+    } catch (err: any) {
+      setError(err.message || 'Error al asignar clientes')
+    } finally {
+      setBulkAssigning(false)
     }
   }
 
@@ -421,7 +480,37 @@ export default function ApplicationsPage() {
     }
   }
 
+  const pageApps = applications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const allPageSelected = pageApps.length > 0 && pageApps.every((a) => selectedAppIds.has(a.id))
+
   const columns = [
+    {
+      key: '_select',
+      header: (
+        <input
+          type="checkbox"
+          checked={allPageSelected}
+          onChange={(e) => {
+            const next = new Set(selectedAppIds)
+            pageApps.forEach((a) => e.target.checked ? next.add(a.id) : next.delete(a.id))
+            setSelectedAppIds(next)
+          }}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600"
+        />
+      ),
+      render: (app: Application) => (
+        <input
+          type="checkbox"
+          checked={selectedAppIds.has(app.id)}
+          onChange={(e) => {
+            const next = new Set(selectedAppIds)
+            e.target.checked ? next.add(app.id) : next.delete(app.id)
+            setSelectedAppIds(next)
+          }}
+          className="h-4 w-4 rounded border-gray-300 text-blue-600"
+        />
+      ),
+    },
     {
       key: 'name',
       header: t('applications.applicationName'),
@@ -577,7 +666,108 @@ export default function ApplicationsPage() {
 
   return (
     <div>
-      <PageHeader title={t('applications.title')} />
+      <PageHeader
+        title={t('applications.title')}
+        actions={
+          <Button variant="primary" onClick={() => setShowNewAppModal(true)}>
+            + Nueva Aplicación
+          </Button>
+        }
+      />
+
+      {/* Modal nueva aplicación */}
+      {showNewAppModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md bg-white rounded-lg shadow-xl overflow-hidden mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900">Nueva Aplicación</h3>
+              <button
+                onClick={() => { setShowNewAppModal(false); setNewAppForm({ nombre: '', responsable: '', precio: '', fecha: '' }); setError(null) }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSaveNewApp}>
+              <div className="p-6 space-y-4">
+                <ErrorMessage message={error || ''} />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newAppForm.nombre}
+                    onChange={(e) => setNewAppForm({ ...newAppForm, nombre: e.target.value })}
+                    placeholder="Ej: Slack, AWS S3..."
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Responsable
+                  </label>
+                  <input
+                    type="text"
+                    value={newAppForm.responsable}
+                    onChange={(e) => setNewAppForm({ ...newAppForm, responsable: e.target.value })}
+                    placeholder="Nombre del responsable"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Precio ($) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newAppForm.precio}
+                    onChange={(e) => setNewAppForm({ ...newAppForm, precio: e.target.value })}
+                    placeholder="0.00"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={newAppForm.fecha}
+                    onChange={(e) => setNewAppForm({ ...newAppForm, fecha: e.target.value })}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setShowNewAppModal(false); setNewAppForm({ nombre: '', responsable: '', precio: '', fecha: '' }); setError(null) }}
+                  disabled={savingNewApp}
+                  className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-gray-700 hover:bg-gray-100"
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  isLoading={savingNewApp}
+                >
+                  {t('common.save')}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <Card title={t('common.filter')} className="mb-6">
         <div className="flex flex-wrap items-end gap-4">
@@ -653,6 +843,18 @@ export default function ApplicationsPage() {
               </svg>
             </div>
           </div>
+          <div className="flex items-end">
+            <button
+              onClick={() => setShowUnassignedOnly((v) => !v)}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                showUnassignedOnly
+                  ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200'
+                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Sin asignar
+            </button>
+          </div>
         </div>
       </Card>
 
@@ -698,7 +900,7 @@ export default function ApplicationsPage() {
                 onClick={() => {
                   setDistributingApp(null)
                   setDistributionRows([])
-                  setError(null)
+                  setModalError(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
               >
@@ -710,7 +912,7 @@ export default function ApplicationsPage() {
 
             {/* Cuerpo */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              <ErrorMessage message={error || ''} className="mb-4" />
+              <ErrorMessage message={modalError || ''} className="mb-4" />
 
               <div className="space-y-3">
                 {distributionRows.map((row, index) => {
@@ -753,31 +955,18 @@ export default function ApplicationsPage() {
                           inputMode="decimal"
                           value={row.percentage === '' ? '' : String(row.percentage)}
                           onChange={(e) => {
-                            const value = e.target.value.trim()
-                            
-                            // Permitir string vacío
-                            if (value === '') {
-                              handleUpdateDistributionRow(index, 'percentage', '')
-                              return
-                            }
-                            
-                            // Validar que sea un número válido (permite "0", "0.", "0.5", etc.)
-                            const numberRegex = /^(\d+\.?\d*|\.\d+)$/
-                            if (numberRegex.test(value)) {
-                              const numValue = parseFloat(value)
-                              // Solo guardar si es un número válido y está en el rango
-                              if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
-                                handleUpdateDistributionRow(index, 'percentage', numValue)
-                              } else if (value === '0' || value.startsWith('0.') || value === '.') {
-                                // Permitir escribir "0", "0.", ".5" mientras se escribe
+                            const value = e.target.value
+                            // Permitir vacío, dígitos, punto decimal — guardar siempre como string mientras se escribe
+                            if (value === '' || /^(\d*\.?\d*)$/.test(value)) {
+                              const num = parseFloat(value)
+                              if (value === '' || value === '.' || isNaN(num) || num <= 100) {
                                 handleUpdateDistributionRow(index, 'percentage', value as any)
                               }
                             }
                           }}
                           onBlur={(e) => {
-                            // Al perder el foco, convertir a número si es válido
                             const value = e.target.value.trim()
-                            if (value === '') {
+                            if (value === '' || value === '.') {
                               handleUpdateDistributionRow(index, 'percentage', '')
                             } else {
                               const numValue = parseFloat(value)
@@ -815,14 +1004,58 @@ export default function ApplicationsPage() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <button
-                  type="button"
-                  onClick={handleAddDistributionRow}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
-                >
-                  <span>+</span>
-                  Agregar Cliente
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddDistributionRow}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
+                  >
+                    <span>+</span>
+                    Agregar Cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const assigned = distributionRows.filter((r) => r.clientId)
+                      const assignedIds = new Set(assigned.map((r) => r.clientId))
+                      const assignedTotal = assigned.reduce(
+                        (sum, r) => sum + (typeof r.percentage === 'number' ? r.percentage : 0),
+                        0
+                      )
+                      const remaining = parseFloat((100 - assignedTotal).toFixed(10))
+                      if (remaining <= 0) {
+                        setModalError('No hay porcentaje restante para distribuir (ya se asignó el 100%)')
+                        return
+                      }
+                      const unassignedClients = clients.filter(
+                        (c) => c.id !== TODOS_CLIENT_ID && !assignedIds.has(c.id)
+                      )
+                      if (unassignedClients.length === 0) {
+                        setModalError('Todos los clientes ya están asignados')
+                        return
+                      }
+                      const perClient = parseFloat((remaining / unassignedClients.length).toFixed(2))
+                      let distributed = 0
+                      const newRows = unassignedClients.map((c, i) => {
+                        const isLast = i === unassignedClients.length - 1
+                        const pct = isLast
+                          ? parseFloat((remaining - distributed).toFixed(2))
+                          : perClient
+                        distributed += perClient
+                        return { clientId: c.id, percentage: pct }
+                      })
+                      // Keep existing rows with clients, replace empty rows
+                      setDistributionRows([
+                        ...distributionRows.filter((r) => r.clientId),
+                        ...newRows,
+                      ])
+                      setModalError(null)
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 rounded-md hover:bg-purple-100"
+                  >
+                    Distribuir resto entre todos
+                  </button>
+                </div>
                 <div className="text-sm text-gray-600">
                   Total: <span className={`font-semibold ${Math.abs(distributionRows.reduce((sum, r) => sum + (typeof r.percentage === 'number' ? r.percentage : 0), 0) - 100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
                     {distributionRows.reduce((sum, r) => sum + (typeof r.percentage === 'number' ? r.percentage : 0), 0).toFixed(2)}%
@@ -839,7 +1072,7 @@ export default function ApplicationsPage() {
                 onClick={() => {
                   setDistributingApp(null)
                   setDistributionRows([])
-                  setError(null)
+                  setModalError(null)
                 }}
                 disabled={savingDistribution}
                 className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-gray-700 hover:bg-gray-100 hover:border-gray-300 disabled:opacity-50"
@@ -873,9 +1106,43 @@ export default function ApplicationsPage() {
         </Card>
       ) : (
         <>
+          {/* Barra de asignación bulk — aparece encima de la tabla */}
+          {selectedAppIds.size > 0 && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+              <span className="text-sm font-medium text-blue-800">
+                {selectedAppIds.size} seleccionada{selectedAppIds.size !== 1 ? 's' : ''}
+              </span>
+              <div className="w-60">
+                <Select
+                  value={bulkClientId}
+                  onChange={setBulkClientId}
+                  options={clients.map((c) => ({ value: c.id, label: c.name }))}
+                  placeholder="Seleccionar cliente"
+                  searchable
+                />
+              </div>
+              <button
+                onClick={handleBulkAssign}
+                disabled={!bulkClientId || bulkAssigning}
+                className="rounded-full bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {bulkAssigning ? 'Asignando...' : 'Asignar a seleccionadas'}
+              </button>
+              <button
+                onClick={() => { setSelectedAppIds(new Set()); setBulkClientId('') }}
+                className="ml-auto text-blue-400 hover:text-blue-700"
+                title="Cancelar selección"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
           <Table
             columns={columns}
-            data={applications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+            data={pageApps}
             loading={loading}
             emptyMessage={t('applications.noApplications')}
             keyExtractor={(app) => app.id}

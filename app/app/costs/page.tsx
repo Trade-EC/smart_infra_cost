@@ -10,13 +10,14 @@ import {
   TransactionsRepository,
   AWSReportsRepository,
   ApplicationCostDistributionsRepository,
+  TarifasRepository,
 } from '@/lib/repositories'
+import type { Tarifa } from '@/lib/repositories/tarifasRepository'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client, Transaction } from '@/types'
 import {
   PageHeader,
-  Input,
   ErrorMessage,
   DateRangePicker,
   Select,
@@ -34,13 +35,15 @@ export default function CostsPage() {
   const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
   const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
   const distributionsRepo = useMemo(() => new ApplicationCostDistributionsRepository(supabase), [supabase])
-  
+  const tarifasRepo = useMemo(() => new TarifasRepository(supabase), [supabase])
+
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
   const [clients, setClients] = useState<Client[]>([])
   const [transactions, setTransactions] = useState<TransactionWithCost[]>([])
   const [applications, setApplications] = useState<Application[]>([])
   const [awsReports, setAwsReports] = useState<AWSReport[]>([])
+  const [tarifas, setTarifas] = useState<Tarifa[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,6 +58,7 @@ export default function CostsPage() {
       setTransactions([])
       setApplications([])
       setAwsReports([])
+      setTarifas([])
     }
   }, [dateRange, selectedClientId])
 
@@ -97,6 +101,9 @@ export default function CostsPage() {
             dateRange.end
           ),
         ])
+
+      const tarifasData = await tarifasRepo.getByClient(selectedClientId, dateRange.end.split('T')[0])
+      setTarifas(tarifasData)
 
       setTransactions(transactionsData)
 
@@ -177,11 +184,32 @@ export default function CostsPage() {
     return dateStr
   }
 
-  // Calcular totales
+  // Calcular subtotales por fuente
   const transactionsTotal = transactions.reduce((sum, t) => sum + t.assigned_cost, 0)
   const applicationsTotal = applications.reduce((sum, a) => sum + a.price, 0)
   const awsTotal = awsReports.reduce((sum, a) => sum + a.seller_cost, 0)
-  const grandTotal = transactionsTotal + applicationsTotal + awsTotal
+  const baseTotal = transactionsTotal + applicationsTotal + awsTotal
+
+  // Calcular tarifas aplicadas
+  const tarifasAplicadas = tarifas.map((tarifa) => {
+    let base = 0
+    if (tarifa.aplica_a === 'transactions') base = transactionsTotal
+    else if (tarifa.aplica_a === 'applications') base = applicationsTotal
+    else if (tarifa.aplica_a === 'aws') base = awsTotal
+    else if (tarifa.aplica_a === 'total') base = baseTotal
+    return { tarifa, monto: base * (tarifa.porcentaje / 100) }
+  })
+
+  const tarifasTotal = tarifasAplicadas.reduce((sum, t) => sum + t.monto, 0)
+  const grandTotal = baseTotal + tarifasTotal
+
+  const APLICA_A_LABELS: Record<string, string> = {
+    transactions: 'Transacciones',
+    aws: 'AWS',
+    gcp: 'GCP',
+    applications: 'Aplicaciones',
+    total: 'Total base',
+  }
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
 
@@ -518,6 +546,52 @@ export default function CostsPage() {
               </>
             )}
           </div>
+
+          {/* Sección de Tarifas */}
+          {tarifasAplicadas.length > 0 && (
+            <div className="rounded-lg bg-white p-6 shadow">
+              <h2 className="mb-4 text-xl font-bold text-gray-900">Tarifas Aplicadas</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-amber-50">
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tarifa</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Tipo</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Aplica a</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Base</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">%</th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tarifasAplicadas.map(({ tarifa, monto }) => {
+                      let base = 0
+                      if (tarifa.aplica_a === 'transactions') base = transactionsTotal
+                      else if (tarifa.aplica_a === 'applications') base = applicationsTotal
+                      else if (tarifa.aplica_a === 'aws') base = awsTotal
+                      else if (tarifa.aplica_a === 'total') base = baseTotal
+                      return (
+                        <tr key={tarifa.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{tarifa.nombre}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{tarifa.tipo}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{APLICA_A_LABELS[tarifa.aplica_a]}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">${base.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{tarifa.porcentaje}%</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">${monto.toFixed(2)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50">
+                      <td colSpan={5} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Total Tarifas:</td>
+                      <td className="px-4 py-3 text-sm font-bold text-gray-900">${tarifasTotal.toFixed(2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Total General */}
           <div className="rounded-lg bg-blue-50 border-2 border-blue-200 p-6">

@@ -106,7 +106,7 @@ export class ApplicationCostDistributionsRepository {
   }
 
   async createOrUpdateMany(distributions: CreateDistributionData[]): Promise<ApplicationCostDistribution[]> {
-    const distributionsToUpsert = distributions.map((dist) => ({
+    const rows = distributions.map((dist) => ({
       application_id: dist.applicationId,
       client_id: dist.clientId,
       allocation_percentage: dist.percentage,
@@ -115,10 +115,7 @@ export class ApplicationCostDistributionsRepository {
 
     const { data, error } = await this.supabase
       .from('application_cost_distributions')
-      .upsert(distributionsToUpsert, {
-        onConflict: 'application_id,client_id',
-        ignoreDuplicates: false,
-      })
+      .insert(rows)
       .select()
 
     if (error) throw error

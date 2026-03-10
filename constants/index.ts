@@ -2,9 +2,10 @@
 export const NAVIGATION_ITEMS = [
   { key: 'clients', href: '/app/clients', icon: '👥' },
   { key: 'applications', href: '/app/applications', icon: '📱' },
-  { key: 'aws', href: '/app/aws', icon: '☁️' },
+  { key: 'aws', href: '/app/cloud', icon: '☁️' },
   { key: 'transactions', href: '/app/transactions', icon: '💳' },
   { key: 'costs', href: '/app/costs', icon: '💰' },
+  { key: 'tarifas', href: '/app/tarifas', icon: '🏷️' },
   { key: 'reports', href: '/app/reports', icon: '📈' },
   { key: 'users', href: '/app/users', icon: '👤' },
 ] as const
@@ -18,8 +19,9 @@ export const ROUTES = {
   APPLICATIONS: '/app/applications',
   COSTS: '/app/costs',
   TRANSACTIONS: '/app/transactions',
+  TARIFAS: '/app/tarifas',
   REPORTS: '/app/reports',
-  AWS: '/app/aws',
+  AWS: '/app/cloud',
   USERS: '/app/users',
 } as const
 

@@ -1,6 +1,6 @@
 {
   "es": {
-    "appName": "CostManager TRD",
+    "appName": "Costos TRD",
     "appDescription": "Gestión de costos de infraestructura",
     "common": {
       "save": "Guardar",
@@ -47,7 +47,8 @@
       "costs": "Costos",
       "transactions": "Transacciones",
       "reports": "Reportes",
-      "aws": "AWS",
+      "aws": "Cloud",
+      "tarifas": "Tarifas",
       "users": "Usuarios",
       "logout": "Cerrar Sesión"
     },
@@ -175,7 +176,7 @@
       "clientCosts": "Costos por Cliente"
     },
     "aws": {
-      "title": "AWS",
+      "title": "Cloud",
       "uploadCSV": "Subir CSV",
       "uploadCSVTitle": "Cargar Reporte AWS",
       "selectFile": "Seleccionar archivo CSV",

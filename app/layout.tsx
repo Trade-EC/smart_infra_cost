@@ -3,7 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CostManager TRD',
+  title: 'Costos TRD',
   description: 'Gestión de costos de infraestructura',
   icons: {
     icon: '/favicon.svg',
