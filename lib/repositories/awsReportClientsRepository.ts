@@ -29,4 +29,33 @@ export class AWSReportClientsRepository {
       .eq('aws_report_id', awsReportId)
     if (error) throw error
   }
+
+  async getReportsByClientAndDateRange(
+    clientId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<string[]> {
+    const startDateFormatted = startDate.split('T')[0]
+    const endDateFormatted = endDate.split('T')[0]
+
+    // Get report IDs assigned to this client
+    const { data: clientRows, error: clientError } = await this.supabase
+      .from('aws_report_clients')
+      .select('aws_report_id')
+      .eq('client_id', clientId)
+    if (clientError) throw clientError
+    if (!clientRows || clientRows.length === 0) return []
+
+    const reportIds = clientRows.map((r: any) => r.aws_report_id)
+
+    // Filter by date range
+    const { data, error } = await this.supabase
+      .from('aws_reports')
+      .select('id')
+      .in('id', reportIds)
+      .gte('date', startDateFormatted)
+      .lte('date', endDateFormatted)
+    if (error) throw error
+    return (data || []).map((r: any) => r.id)
+  }
 }

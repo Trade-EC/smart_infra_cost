@@ -9,11 +9,13 @@ import {
   ClientsRepository,
   TransactionsRepository,
   AWSReportsRepository,
+  GCPReportsRepository,
   ApplicationCostDistributionsRepository,
   TarifasRepository,
 } from '@/lib/repositories'
 import type { Tarifa } from '@/lib/repositories/tarifasRepository'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
+import type { GCPReport } from '@/lib/repositories/gcpReportsRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client, Transaction } from '@/types'
 import {
@@ -34,6 +36,7 @@ export default function CostsPage() {
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
   const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
   const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
+  const gcpReportsRepo = useMemo(() => new GCPReportsRepository(supabase), [supabase])
   const distributionsRepo = useMemo(() => new ApplicationCostDistributionsRepository(supabase), [supabase])
   const tarifasRepo = useMemo(() => new TarifasRepository(supabase), [supabase])
 
@@ -43,6 +46,7 @@ export default function CostsPage() {
   const [transactions, setTransactions] = useState<TransactionWithCost[]>([])
   const [applications, setApplications] = useState<Application[]>([])
   const [awsReports, setAwsReports] = useState<AWSReport[]>([])
+  const [gcpReports, setGcpReports] = useState<GCPReport[]>([])
   const [tarifas, setTarifas] = useState<Tarifa[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +62,7 @@ export default function CostsPage() {
       setTransactions([])
       setApplications([])
       setAwsReports([])
+      setGcpReports([])
       setTarifas([])
     }
   }, [dateRange, selectedClientId])
@@ -79,7 +84,7 @@ export default function CostsPage() {
 
     try {
       // Todas las queries son independientes — se ejecutan en paralelo
-      const [transactionsData, allApplications, distributions, awsReportsData] =
+      const [transactionsData, allApplications, distributions, awsReportsData, gcpReportsData] =
         await Promise.all([
           transactionsRepo.getByClientAndDateRange(
             selectedClientId,
@@ -96,6 +101,11 @@ export default function CostsPage() {
             dateRange.end
           ),
           awsReportsRepo.getByClientAndDateRange(
+            selectedClientId,
+            dateRange.start,
+            dateRange.end
+          ),
+          gcpReportsRepo.getByClientAndDateRange(
             selectedClientId,
             dateRange.start,
             dateRange.end
@@ -136,6 +146,7 @@ export default function CostsPage() {
 
       setApplications(applicationsData)
       setAwsReports(awsReportsData)
+      setGcpReports(gcpReportsData)
     } catch (err: any) {
       setError(err.message || 'Error al cargar los costos')
     } finally {
@@ -188,7 +199,8 @@ export default function CostsPage() {
   const transactionsTotal = transactions.reduce((sum, t) => sum + t.assigned_cost, 0)
   const applicationsTotal = applications.reduce((sum, a) => sum + a.price, 0)
   const awsTotal = awsReports.reduce((sum, a) => sum + a.seller_cost, 0)
-  const baseTotal = transactionsTotal + applicationsTotal + awsTotal
+  const gcpTotal = gcpReports.reduce((sum, r) => sum + r.cost, 0)
+  const baseTotal = transactionsTotal + applicationsTotal + awsTotal + gcpTotal
 
   // Calcular tarifas aplicadas
   const tarifasAplicadas = tarifas.map((tarifa) => {
@@ -196,6 +208,7 @@ export default function CostsPage() {
     if (tarifa.aplica_a === 'transactions') base = transactionsTotal
     else if (tarifa.aplica_a === 'applications') base = applicationsTotal
     else if (tarifa.aplica_a === 'aws') base = awsTotal
+    else if (tarifa.aplica_a === 'gcp') base = gcpTotal
     else if (tarifa.aplica_a === 'total') base = baseTotal
     return { tarifa, monto: base * (tarifa.porcentaje / 100) }
   })
@@ -302,6 +315,31 @@ export default function CostsPage() {
           `$${r.seller_cost.toFixed(2)}`,
         ]),
         foot: [['', '', 'Total AWS:', `$${awsTotal.toFixed(2)}`]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 10
+    }
+
+    // GCP table
+    if (gcpReports.length > 0) {
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('GCP', 14, y)
+      y += 4
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Fecha', 'Proyecto', 'ID Proyecto', 'Costo']],
+        body: gcpReports.map((r) => [
+          formatDate(r.date),
+          r.project_name,
+          r.project_id,
+          `$${r.cost.toFixed(2)}`,
+        ]),
+        foot: [['', '', 'Total GCP:', `$${gcpTotal.toFixed(2)}`]],
         styles: { fontSize: 9 },
         headStyles: { fillColor: [59, 130, 246] },
         footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
@@ -538,6 +576,67 @@ export default function CostsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
                           ${awsTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Sección de GCP */}
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">
+              GCP
+            </h2>
+            {gcpReports.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay costos de GCP en el rango seleccionado</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-blue-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Fecha
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Proyecto
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          ID Proyecto
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
+                          Costo
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gcpReports.map((report) => (
+                        <tr key={report.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            {formatDate(report.date)}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.project_name}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {report.project_id}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                            ${report.cost.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
+                          Total GCP:
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                          ${gcpTotal.toFixed(2)}
                         </td>
                       </tr>
                     </tfoot>
