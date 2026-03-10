@@ -78,31 +78,43 @@ export class GCPReportsRepository {
   async createMany(reports: CreateGCPReportData[]): Promise<GCPReport[]> {
     const { data: user } = await this.supabase.auth.getUser()
 
-    const reportsToInsert = reports.map((report) => ({
-      project_name: report.projectName,
-      project_id: report.projectId,
-      cost: report.cost,
-      client_id: report.clientId || null,
-      date: report.date,
-      created_by: user?.user?.id || null,
-    }))
+    const reportsToInsert = reports
+      .filter((report) => report.cost > 0)
+      .map((report) => ({
+        project_name: report.projectName,
+        project_id: report.projectId,
+        cost: report.cost,
+        client_id: report.clientId || null,
+        date: report.date,
+        created_by: user?.user?.id || null,
+      }))
 
-    // Eliminar registros existentes para las mismas fechas antes de insertar
+    // Obtener registros existentes para las mismas fechas
     const dates = [...new Set(reportsToInsert.map((r) => r.date))]
-    const { error: deleteError } = await this.supabase
+    const { data: existing, error: fetchError } = await this.supabase
       .from('gcp_reports')
-      .delete()
+      .select('project_id, date')
       .in('date', dates)
 
-    if (deleteError) {
-      throw new Error(
-        deleteError.message || deleteError.details || `Error Supabase [${deleteError.code}]`
-      )
+    if (fetchError) {
+      throw new Error(fetchError.message || fetchError.details || `Error Supabase [${fetchError.code}]`)
     }
+
+    // Construir un Set con las combinaciones project_id+date ya existentes
+    const existingKeys = new Set(
+      (existing || []).map((r: { project_id: string; date: string }) => `${r.project_id}|${r.date}`)
+    )
+
+    // Solo insertar los que no existen (por project_id + date)
+    const newReports = reportsToInsert.filter(
+      (r) => !existingKeys.has(`${r.project_id}|${r.date}`)
+    )
+
+    if (newReports.length === 0) return []
 
     const { data, error } = await this.supabase
       .from('gcp_reports')
-      .insert(reportsToInsert)
+      .insert(newReports)
       .select()
 
     if (error) {
