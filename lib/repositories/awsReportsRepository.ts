@@ -85,7 +85,7 @@ export class AWSReportsRepository {
     const { data: user } = await this.supabase.auth.getUser()
 
     const reportsToInsert = reports
-      .filter((report) => report.sellerCost > 0)
+      .filter((report) => report.sellerCost >= 0.01)
       .map((report) => ({
         customer_name: report.customerName,
         cloud_account_number: report.cloudAccountNumber,

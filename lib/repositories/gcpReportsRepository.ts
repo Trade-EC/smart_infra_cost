@@ -79,7 +79,7 @@ export class GCPReportsRepository {
     const { data: user } = await this.supabase.auth.getUser()
 
     const reportsToInsert = reports
-      .filter((report) => report.cost > 0)
+      .filter((report) => report.cost >= 0.01)
       .map((report) => ({
         project_name: report.projectName,
         project_id: report.projectId,
