@@ -66,12 +66,10 @@ export class ApplicationsRepository {
 
     // Filter by client if needed (client-side filter)
     if (filters?.clientFilter) {
+      const search = filters.clientFilter.toLowerCase()
       return applications.filter((app) =>
-        app.clients?.some(
-          (c) =>
-            c.name.toLowerCase().includes(filters.clientFilter!.toLowerCase()) ||
-            app.responsable.toLowerCase().includes(filters.clientFilter!.toLowerCase())
-        )
+        app.responsable.toLowerCase().includes(search) ||
+        app.clients?.some((c) => c.name.toLowerCase().includes(search))
       )
     }
 

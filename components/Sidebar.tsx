@@ -64,17 +64,22 @@ export default function Sidebar() {
       }`}
     >
       {/* Botón colapsar/expandir + Logo/Header */}
-      <div className="flex h-16 shrink-0 items-center border-b border-gray-800">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-800 px-3">
+        {isExpanded && (
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <h1 className="truncate text-lg font-bold">{t('appName')}</h1>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-800 hover:text-white"
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-800 hover:text-white ${
+            !isExpanded ? 'mx-auto' : ''
+          }`}
           aria-label={isExpanded ? 'Colapsar menú' : 'Expandir menú'}
         >
           <svg
-            className={`h-5 w-5 transition-transform duration-300 ${
-              isExpanded ? 'rotate-0' : 'rotate-180'
-            }`}
+            className="h-5 w-5"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -83,15 +88,10 @@ export default function Sidebar() {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth={2}
-              d="M15 19l-7-7 7-7"
+              d="M4 6h16M4 12h16M4 18h16"
             />
           </svg>
         </button>
-        {isExpanded && (
-          <div className="min-w-0 flex-1 overflow-hidden px-2">
-            <h1 className="truncate text-lg font-bold">{t('appName')}</h1>
-          </div>
-        )}
       </div>
 
       {/* Navigation */}

@@ -1,7 +1,7 @@
 export const translations = {
   es: {
     // App
-    appName: 'CostManager TRD',
+    appName: 'Costos TRD',
     appDescription: 'Gestión de costos de infraestructura',
 
     // Common
