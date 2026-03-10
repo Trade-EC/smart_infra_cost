@@ -3,7 +3,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import { createClient } from '@/lib/supabase/client'
-import { ClientsRepository, AWSReportsRepository, GCPReportsRepository } from '@/lib/repositories'
+import {
+  ClientsRepository,
+  AWSReportsRepository,
+  GCPReportsRepository,
+  AWSReportClientsRepository,
+  GCPReportClientsRepository,
+} from '@/lib/repositories'
 import type { Client } from '@/types'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
 import type { GCPReport } from '@/lib/repositories/gcpReportsRepository'
@@ -18,18 +24,20 @@ import {
 } from '@/components/ui'
 
 interface AWSReportRow {
+  id: string
   customerName: string
   cloudAccountNumber: string
   sellerCost: number
-  clientId: string
+  clientIds: string[]
   date: string
 }
 
 interface GCPReportRow {
+  id: string
   projectName: string
   projectId: string
   cost: number
-  clientId: string
+  clientIds: string[]
   date: string
 }
 
@@ -110,6 +118,7 @@ function AWSTab({ clients }: { clients: Client[] }) {
   const { t } = useTranslation()
   const supabase = useMemo(() => createClient(), [])
   const awsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
+  const awsClientsRepo = useMemo(() => new AWSReportClientsRepository(supabase), [supabase])
 
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -120,7 +129,7 @@ function AWSTab({ clients }: { clients: Client[] }) {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
   const [editingRow, setEditingRow] = useState<string | null>(null)
-  const [editingClientId, setEditingClientId] = useState<string>('')
+  const [clientSelectors, setClientSelectors] = useState<Record<string, string[]>>({})
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [bulkClientId, setBulkClientId] = useState<string>('')
   const [bulkAssigning, setBulkAssigning] = useState(false)
@@ -136,12 +145,20 @@ function AWSTab({ clients }: { clients: Client[] }) {
     setError(null)
     try {
       const reports = await awsRepo.getByDateRange(dateRange.start, dateRange.end)
+      const reportIds = reports.map((r: AWSReport) => r.id)
+      const clientAssignments = await awsClientsRepo.getByReportIds(reportIds)
+      const clientsByReport = new Map<string, string[]>()
+      clientAssignments.forEach((a) => {
+        if (!clientsByReport.has(a.aws_report_id)) clientsByReport.set(a.aws_report_id, [])
+        clientsByReport.get(a.aws_report_id)!.push(a.client_id)
+      })
       setReportData(
         reports.map((r: AWSReport) => ({
+          id: r.id,
           customerName: r.customer_name,
           cloudAccountNumber: r.cloud_account_number,
           sellerCost: r.seller_cost,
-          clientId: r.client_id || '',
+          clientIds: clientsByReport.get(r.id) || [],
           date: r.date,
         }))
       )
@@ -167,7 +184,7 @@ function AWSTab({ clients }: { clients: Client[] }) {
       const headers = parseCSVLine(lines[0]).map((h) => h.trim().replace(/^"|"$/g, ''))
       const customerNameIndex = headers.findIndex((h) => h.toLowerCase() === 'customer name')
       const cloudAccountNumberIndex = headers.findIndex((h) => h.toLowerCase() === 'cloud account number')
-      const sellerCostIndex = headers.findIndex((h) => h.toLowerCase() === 'seller cost (usd)')
+      const sellerCostIndex = headers.findIndex((h) => h.toLowerCase() === 'customer cost (usd)')
 
       if (customerNameIndex === -1 || cloudAccountNumberIndex === -1 || sellerCostIndex === -1) {
         throw new Error(t('aws.csvFormat'))
@@ -191,10 +208,11 @@ function AWSTab({ clients }: { clients: Client[] }) {
 
       const processedData: AWSReportRow[] = Array.from(groupedData.entries())
         .map(([cloudAccountNumber, d]) => ({
+          id: '',
           customerName: d.customerName,
           cloudAccountNumber,
           sellerCost: d.totalCost,
-          clientId: '',
+          clientIds: [],
           date: dateRange.start,
         }))
         .sort((a, b) => a.cloudAccountNumber.localeCompare(b.cloudAccountNumber))
@@ -226,13 +244,15 @@ function AWSTab({ clients }: { clients: Client[] }) {
     setBulkAssigning(true)
     try {
       for (const key of selectedKeys) {
-        if (dateRange?.start) {
-          await awsRepo.updateClient(key, dateRange.start, bulkClientId)
+        const row = reportData.find((r) => r.cloudAccountNumber === key)
+        if (row) {
+          await awsClientsRepo.removeAll(row.id)
+          await awsClientsRepo.assign(row.id, bulkClientId)
         }
       }
       setReportData((prev) =>
         prev.map((row) =>
-          selectedKeys.has(row.cloudAccountNumber) ? { ...row, clientId: bulkClientId } : row
+          selectedKeys.has(row.cloudAccountNumber) ? { ...row, clientIds: [bulkClientId] } : row
         )
       )
       toast.success(`Cliente asignado a ${selectedKeys.size} registros`)
@@ -245,23 +265,51 @@ function AWSTab({ clients }: { clients: Client[] }) {
     }
   }
 
-  const handleClientChange = async (cloudAccountNumber: string, clientId: string) => {
+  const startEditing = (row: AWSReportRow) => {
+    setEditingRow(row.cloudAccountNumber)
+    setClientSelectors({
+      ...clientSelectors,
+      [row.cloudAccountNumber]: row.clientIds.length > 0 ? [...row.clientIds, ''] : [''],
+    })
+  }
+
+  const addClientSelector = (key: string) => {
+    const current = clientSelectors[key] || ['']
+    setClientSelectors({ ...clientSelectors, [key]: [...current, ''] })
+  }
+
+  const updateClientSelector = (key: string, index: number, clientId: string) => {
+    const current = clientSelectors[key] || ['']
+    const updated = [...current]
+    updated[index] = clientId
+    setClientSelectors({ ...clientSelectors, [key]: updated })
+  }
+
+  const removeClientSelector = (key: string, index: number) => {
+    const current = clientSelectors[key] || ['']
+    const updated = current.filter((_, i) => i !== index)
+    setClientSelectors({ ...clientSelectors, [key]: updated.length > 0 ? updated : [''] })
+  }
+
+  const handleSaveClients = async (row: AWSReportRow) => {
+    const clientIds = (clientSelectors[row.cloudAccountNumber] || [])
+      .filter((id) => id !== '')
+      .filter((id, index, self) => self.indexOf(id) === index)
+
     try {
-      if (dateRange?.start) {
-        await awsRepo.updateClient(cloudAccountNumber, dateRange.start, clientId || null)
+      await awsClientsRepo.removeAll(row.id)
+      for (const clientId of clientIds) {
+        await awsClientsRepo.assign(row.id, clientId)
       }
       setReportData((prev) =>
-        prev.map((row) =>
-          row.cloudAccountNumber === cloudAccountNumber ? { ...row, clientId } : row
+        prev.map((r) =>
+          r.cloudAccountNumber === row.cloudAccountNumber ? { ...r, clientIds } : r
         )
       )
+      setEditingRow(null)
+      toast.success('Clientes actualizados')
     } catch (err: any) {
-      setReportData((prev) =>
-        prev.map((row) =>
-          row.cloudAccountNumber === cloudAccountNumber ? { ...row, clientId } : row
-        )
-      )
-      setError(err.message || 'Error al actualizar el cliente')
+      setError(err.message || 'Error al guardar clientes')
     }
   }
 
@@ -271,7 +319,10 @@ function AWSTab({ clients }: { clients: Client[] }) {
     return (
       row.customerName.toLowerCase().includes(s) ||
       row.cloudAccountNumber.toLowerCase().includes(s) ||
-      (row.clientId && clients.find((c) => c.id === row.clientId)?.name.toLowerCase().includes(s))
+      (row.clientIds.length > 0 &&
+        row.clientIds.some((cid) =>
+          clients.find((c) => c.id === cid)?.name.toLowerCase().includes(s)
+        ))
     )
   })
   const totalCost = filtered.reduce((sum, r) => sum + r.sellerCost, 0)
@@ -418,49 +469,70 @@ function AWSTab({ clients }: { clients: Client[] }) {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">${row.sellerCost.toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm min-w-[280px]">
                         {editingRow === row.cloudAccountNumber ? (
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <Select
-                                value={editingClientId}
-                                onChange={setEditingClientId}
-                                options={clients.map((c) => ({ value: c.id, label: c.name }))}
-                                placeholder="Seleccionar cliente"
-                                searchable
-                                clearLabel="Sin cliente"
-                              />
+                          <div className="space-y-2 min-w-[300px]">
+                            {(clientSelectors[row.cloudAccountNumber] || ['']).map((selectedClientId, index) => {
+                              const selectors = clientSelectors[row.cloudAccountNumber] || ['']
+                              const isLastEmpty = index === selectors.length - 1 && selectedClientId === ''
+                              return (
+                                <div key={index} className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <Select
+                                      value={selectedClientId}
+                                      onChange={(val) => updateClientSelector(row.cloudAccountNumber, index, val)}
+                                      options={clients
+                                        .filter((client) => {
+                                          const otherSelections = selectors.filter((id, i) => i !== index && id !== '')
+                                          return !otherSelections.includes(client.id)
+                                        })
+                                        .map((client) => ({ value: client.id, label: client.name }))}
+                                      placeholder="Seleccione un Cliente"
+                                      searchable
+                                      clearLabel="Sin cliente"
+                                    />
+                                  </div>
+                                  {!isLastEmpty && (
+                                    <button
+                                      onClick={() => removeClientSelector(row.cloudAccountNumber, index)}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 shrink-0"
+                                    >×</button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => addClientSelector(row.cloudAccountNumber)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500 text-white hover:bg-green-600"
+                              >+</button>
+                              <div className="flex-1" />
+                              <button
+                                onClick={() => handleSaveClients(row)}
+                                className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                              >{t('common.save')}</button>
+                              <button
+                                onClick={() => { setEditingRow(null); setClientSelectors({ ...clientSelectors, [row.cloudAccountNumber]: [''] }) }}
+                                className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                              >{t('common.cancel')}</button>
                             </div>
-                            <button
-                              onClick={async () => {
-                                await handleClientChange(row.cloudAccountNumber, editingClientId)
-                                setEditingRow(null)
-                              }}
-                              className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                            >
-                              {t('common.save')}
-                            </button>
-                            <button
-                              onClick={() => setEditingRow(null)}
-                              className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                            >
-                              {t('common.cancel')}
-                            </button>
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              {row.clientId ? (
-                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                                  {clients.find((c) => c.id === row.clientId)?.name || row.clientId}
-                                </span>
+                            <div className="flex-1 flex flex-wrap gap-1">
+                              {row.clientIds.length > 0 ? (
+                                row.clientIds.map((cid) => (
+                                  <span key={cid} className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                                    {clients.find((c) => c.id === cid)?.name || cid}
+                                  </span>
+                                ))
                               ) : (
                                 <span className="text-gray-400 text-xs">Sin asignar</span>
                               )}
                             </div>
                             <button
-                              onClick={() => { setEditingRow(row.cloudAccountNumber); setEditingClientId(row.clientId || '') }}
+                              onClick={() => startEditing(row)}
                               className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                             >
-                              {row.clientId ? t('common.edit') : 'Asignar Cliente'}
+                              {row.clientIds.length > 0 ? t('common.edit') : 'Asignar Cliente'}
                             </button>
                           </div>
                         )}
@@ -506,6 +578,7 @@ function GCPTab({ clients }: { clients: Client[] }) {
   const { t } = useTranslation()
   const supabase = useMemo(() => createClient(), [])
   const gcpRepo = useMemo(() => new GCPReportsRepository(supabase), [supabase])
+  const gcpClientsRepo = useMemo(() => new GCPReportClientsRepository(supabase), [supabase])
 
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -516,7 +589,7 @@ function GCPTab({ clients }: { clients: Client[] }) {
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
   const [editingRow, setEditingRow] = useState<string | null>(null)
-  const [editingClientId, setEditingClientId] = useState<string>('')
+  const [clientSelectors, setClientSelectors] = useState<Record<string, string[]>>({})
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [bulkClientId, setBulkClientId] = useState<string>('')
   const [bulkAssigning, setBulkAssigning] = useState(false)
@@ -532,12 +605,20 @@ function GCPTab({ clients }: { clients: Client[] }) {
     setError(null)
     try {
       const reports = await gcpRepo.getByDateRange(dateRange.start, dateRange.end)
+      const reportIds = reports.map((r: GCPReport) => r.id)
+      const clientAssignments = await gcpClientsRepo.getByReportIds(reportIds)
+      const clientsByReport = new Map<string, string[]>()
+      clientAssignments.forEach((a) => {
+        if (!clientsByReport.has(a.gcp_report_id)) clientsByReport.set(a.gcp_report_id, [])
+        clientsByReport.get(a.gcp_report_id)!.push(a.client_id)
+      })
       setReportData(
         reports.map((r: GCPReport) => ({
+          id: r.id,
           projectName: r.project_name,
           projectId: r.project_id,
           cost: r.cost,
-          clientId: r.client_id || '',
+          clientIds: clientsByReport.get(r.id) || [],
           date: r.date,
         }))
       )
@@ -612,10 +693,11 @@ function GCPTab({ clients }: { clients: Client[] }) {
 
       const processedData: GCPReportRow[] = Array.from(groupedData.entries())
         .map(([projectId, d]) => ({
+          id: '',
           projectName: d.projectName,
           projectId,
           cost: d.totalCost,
-          clientId: '',
+          clientIds: [],
           date: dateRange.start,
         }))
         .sort((a, b) => a.projectId.localeCompare(b.projectId))
@@ -647,13 +729,15 @@ function GCPTab({ clients }: { clients: Client[] }) {
     setBulkAssigning(true)
     try {
       for (const key of selectedKeys) {
-        if (dateRange?.start) {
-          await gcpRepo.updateClient(key, dateRange.start, bulkClientId)
+        const row = reportData.find((r) => r.projectId === key)
+        if (row) {
+          await gcpClientsRepo.removeAll(row.id)
+          await gcpClientsRepo.assign(row.id, bulkClientId)
         }
       }
       setReportData((prev) =>
         prev.map((row) =>
-          selectedKeys.has(row.projectId) ? { ...row, clientId: bulkClientId } : row
+          selectedKeys.has(row.projectId) ? { ...row, clientIds: [bulkClientId] } : row
         )
       )
       toast.success(`Cliente asignado a ${selectedKeys.size} registros`)
@@ -666,19 +750,49 @@ function GCPTab({ clients }: { clients: Client[] }) {
     }
   }
 
-  const handleClientChange = async (projectId: string, clientId: string) => {
+  const startEditing = (row: GCPReportRow) => {
+    setEditingRow(row.projectId)
+    setClientSelectors({
+      ...clientSelectors,
+      [row.projectId]: row.clientIds.length > 0 ? [...row.clientIds, ''] : [''],
+    })
+  }
+
+  const addClientSelector = (key: string) => {
+    const current = clientSelectors[key] || ['']
+    setClientSelectors({ ...clientSelectors, [key]: [...current, ''] })
+  }
+
+  const updateClientSelector = (key: string, index: number, clientId: string) => {
+    const current = clientSelectors[key] || ['']
+    const updated = [...current]
+    updated[index] = clientId
+    setClientSelectors({ ...clientSelectors, [key]: updated })
+  }
+
+  const removeClientSelector = (key: string, index: number) => {
+    const current = clientSelectors[key] || ['']
+    const updated = current.filter((_, i) => i !== index)
+    setClientSelectors({ ...clientSelectors, [key]: updated.length > 0 ? updated : [''] })
+  }
+
+  const handleSaveClients = async (row: GCPReportRow) => {
+    const clientIds = (clientSelectors[row.projectId] || [])
+      .filter((id) => id !== '')
+      .filter((id, index, self) => self.indexOf(id) === index)
+
     try {
-      if (dateRange?.start) {
-        await gcpRepo.updateClient(projectId, dateRange.start, clientId || null)
+      await gcpClientsRepo.removeAll(row.id)
+      for (const clientId of clientIds) {
+        await gcpClientsRepo.assign(row.id, clientId)
       }
       setReportData((prev) =>
-        prev.map((row) => (row.projectId === projectId ? { ...row, clientId } : row))
+        prev.map((r) => (r.projectId === row.projectId ? { ...r, clientIds } : r))
       )
+      setEditingRow(null)
+      toast.success('Clientes actualizados')
     } catch (err: any) {
-      setReportData((prev) =>
-        prev.map((row) => (row.projectId === projectId ? { ...row, clientId } : row))
-      )
-      setError(err.message || 'Error al actualizar el cliente')
+      setError(err.message || 'Error al guardar clientes')
     }
   }
 
@@ -688,7 +802,10 @@ function GCPTab({ clients }: { clients: Client[] }) {
     return (
       row.projectName.toLowerCase().includes(s) ||
       row.projectId.toLowerCase().includes(s) ||
-      (row.clientId && clients.find((c) => c.id === row.clientId)?.name.toLowerCase().includes(s))
+      (row.clientIds.length > 0 &&
+        row.clientIds.some((cid) =>
+          clients.find((c) => c.id === cid)?.name.toLowerCase().includes(s)
+        ))
     )
   })
   const totalCost = filtered.reduce((sum, r) => sum + r.cost, 0)
@@ -838,49 +955,70 @@ function GCPTab({ clients }: { clients: Client[] }) {
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">${row.cost.toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm min-w-[280px]">
                         {editingRow === row.projectId ? (
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              <Select
-                                value={editingClientId}
-                                onChange={setEditingClientId}
-                                options={clients.map((c) => ({ value: c.id, label: c.name }))}
-                                placeholder="Seleccionar cliente"
-                                searchable
-                                clearLabel="Sin cliente"
-                              />
+                          <div className="space-y-2 min-w-[300px]">
+                            {(clientSelectors[row.projectId] || ['']).map((selectedClientId, index) => {
+                              const selectors = clientSelectors[row.projectId] || ['']
+                              const isLastEmpty = index === selectors.length - 1 && selectedClientId === ''
+                              return (
+                                <div key={index} className="flex items-center gap-2">
+                                  <div className="flex-1">
+                                    <Select
+                                      value={selectedClientId}
+                                      onChange={(val) => updateClientSelector(row.projectId, index, val)}
+                                      options={clients
+                                        .filter((client) => {
+                                          const otherSelections = selectors.filter((id, i) => i !== index && id !== '')
+                                          return !otherSelections.includes(client.id)
+                                        })
+                                        .map((client) => ({ value: client.id, label: client.name }))}
+                                      placeholder="Seleccione un Cliente"
+                                      searchable
+                                      clearLabel="Sin cliente"
+                                    />
+                                  </div>
+                                  {!isLastEmpty && (
+                                    <button
+                                      onClick={() => removeClientSelector(row.projectId, index)}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200 shrink-0"
+                                    >×</button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => addClientSelector(row.projectId)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500 text-white hover:bg-green-600"
+                              >+</button>
+                              <div className="flex-1" />
+                              <button
+                                onClick={() => handleSaveClients(row)}
+                                className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
+                              >{t('common.save')}</button>
+                              <button
+                                onClick={() => { setEditingRow(null); setClientSelectors({ ...clientSelectors, [row.projectId]: [''] }) }}
+                                className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                              >{t('common.cancel')}</button>
                             </div>
-                            <button
-                              onClick={async () => {
-                                await handleClientChange(row.projectId, editingClientId)
-                                setEditingRow(null)
-                              }}
-                              className="rounded-full bg-green-50 border border-green-200 px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-100"
-                            >
-                              {t('common.save')}
-                            </button>
-                            <button
-                              onClick={() => setEditingRow(null)}
-                              className="rounded-full bg-gray-50 border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
-                            >
-                              {t('common.cancel')}
-                            </button>
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                              {row.clientId ? (
-                                <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                                  {clients.find((c) => c.id === row.clientId)?.name || row.clientId}
-                                </span>
+                            <div className="flex-1 flex flex-wrap gap-1">
+                              {row.clientIds.length > 0 ? (
+                                row.clientIds.map((cid) => (
+                                  <span key={cid} className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                                    {clients.find((c) => c.id === cid)?.name || cid}
+                                  </span>
+                                ))
                               ) : (
                                 <span className="text-gray-400 text-xs">Sin asignar</span>
                               )}
                             </div>
                             <button
-                              onClick={() => { setEditingRow(row.projectId); setEditingClientId(row.clientId || '') }}
+                              onClick={() => startEditing(row)}
                               className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                             >
-                              {row.clientId ? t('common.edit') : 'Asignar Cliente'}
+                              {row.clientIds.length > 0 ? t('common.edit') : 'Asignar Cliente'}
                             </button>
                           </div>
                         )}
