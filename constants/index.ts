@@ -2,6 +2,7 @@
 export const NAVIGATION_ITEMS = [
   { key: 'clients', href: '/app/clients', icon: '👥' },
   { key: 'applications', href: '/app/applications', icon: '📱' },
+  { key: 'licencias', href: '/app/licencias', icon: '📋' },
   { key: 'aws', href: '/app/cloud', icon: '☁️' },
   { key: 'transactions', href: '/app/transactions', icon: '💳' },
   { key: 'costs', href: '/app/costs', icon: '💰' },
