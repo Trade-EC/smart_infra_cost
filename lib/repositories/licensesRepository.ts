@@ -98,12 +98,13 @@ export class LicensesRepository {
 
   async update(
     id: string,
-    data: Partial<Pick<CreateLicenseData, 'name' | 'responsable' | 'price'>>
+    data: Partial<Pick<CreateLicenseData, 'name' | 'responsable' | 'price' | 'date'>>
   ): Promise<License> {
     const updates: Record<string, any> = {}
     if (data.name !== undefined) updates.name = data.name.trim()
     if (data.responsable !== undefined) updates.responsable = data.responsable.trim()
     if (data.price !== undefined) updates.price = Math.abs(data.price)
+    if (data.date !== undefined) updates.date = data.date
 
     const { data: row, error } = await this.supabase
       .from('licenses')

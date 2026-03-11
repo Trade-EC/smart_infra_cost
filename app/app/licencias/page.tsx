@@ -34,7 +34,7 @@ export default function LicenciasPage() {
 
   // Modal editar licencia
   const [editingLicense, setEditingLicense] = useState<License | null>(null)
-  const [editForm, setEditForm] = useState({ nombre: '', responsable: '', precio: '' })
+  const [editForm, setEditForm] = useState({ nombre: '', responsable: '', precio: '', fecha: '' })
   const [savingEdit, setSavingEdit] = useState(false)
 
   // Eliminar
@@ -114,6 +114,7 @@ export default function LicenciasPage() {
       nombre: license.name,
       responsable: license.responsable,
       precio: license.price.toString(),
+      fecha: license.date,
     })
     setError(null)
   }
@@ -132,6 +133,7 @@ export default function LicenciasPage() {
         name: editForm.nombre.trim(),
         responsable: editForm.responsable.trim() || 'Sin asignar',
         price: precio,
+        date: editForm.fecha,
       })
       setEditingLicense(null)
       await loadLicenses()
@@ -451,6 +453,18 @@ export default function LicenciasPage() {
                   min="0"
                   value={editForm.precio}
                   onChange={(e) => setEditForm({ ...editForm, precio: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={editForm.fecha}
+                  onChange={(e) => setEditForm({ ...editForm, fecha: e.target.value })}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
                 />
               </div>
