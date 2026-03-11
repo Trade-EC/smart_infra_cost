@@ -635,16 +635,14 @@ export default function ApplicationsPage() {
                 Distribuir Costo
               </Button>
             )}
-            <Button
-            variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => startEditing(app.id)}
-              className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold"
+              title="Asignar cliente(s)"
             >
-              {app.clients && app.clients.length > 0
-                ? t('common.edit')
-                : t('applications.addClient')}
-            </Button>
+              +
+            </button>
           </div>
         )
       },

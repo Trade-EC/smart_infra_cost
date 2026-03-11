@@ -530,10 +530,12 @@ function AWSTab({ clients }: { clients: Client[] }) {
                               )}
                             </div>
                             <button
+                              type="button"
                               onClick={() => startEditing(row)}
-                              className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                              className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold"
+                              title="Asignar cliente(s)"
                             >
-                              {row.clientIds.length > 0 ? t('common.edit') : 'Asignar Cliente'}
+                              +
                             </button>
                           </div>
                         )}
@@ -1017,10 +1019,12 @@ function GCPTab({ clients }: { clients: Client[] }) {
                               )}
                             </div>
                             <button
+                              type="button"
                               onClick={() => startEditing(row)}
-                              className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                              className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 text-xs font-bold"
+                              title="Asignar cliente(s)"
                             >
-                              {row.clientIds.length > 0 ? t('common.edit') : 'Asignar Cliente'}
+                              +
                             </button>
                           </div>
                         )}

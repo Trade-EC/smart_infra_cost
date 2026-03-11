@@ -12,10 +12,12 @@ import {
   GCPReportsRepository,
   ApplicationCostDistributionsRepository,
   TarifasRepository,
+  LicensesRepository,
 } from '@/lib/repositories'
 import type { Tarifa } from '@/lib/repositories/tarifasRepository'
 import type { AWSReport } from '@/lib/repositories/awsReportsRepository'
 import type { GCPReport } from '@/lib/repositories/gcpReportsRepository'
+import type { License } from '@/lib/repositories/licensesRepository'
 import { useTranslation } from '@/lib/i18n/useTranslation'
 import type { Application, Client, Transaction } from '@/types'
 import {
@@ -39,6 +41,7 @@ export default function CostsPage() {
   const gcpReportsRepo = useMemo(() => new GCPReportsRepository(supabase), [supabase])
   const distributionsRepo = useMemo(() => new ApplicationCostDistributionsRepository(supabase), [supabase])
   const tarifasRepo = useMemo(() => new TarifasRepository(supabase), [supabase])
+  const licensesRepo = useMemo(() => new LicensesRepository(supabase), [supabase])
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null)
   const [selectedClientId, setSelectedClientId] = useState<string>('')
@@ -47,6 +50,7 @@ export default function CostsPage() {
   const [applications, setApplications] = useState<Application[]>([])
   const [awsReports, setAwsReports] = useState<AWSReport[]>([])
   const [gcpReports, setGcpReports] = useState<GCPReport[]>([])
+  const [licenses, setLicenses] = useState<License[]>([])
   const [tarifas, setTarifas] = useState<Tarifa[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +67,7 @@ export default function CostsPage() {
       setApplications([])
       setAwsReports([])
       setGcpReports([])
+      setLicenses([])
       setTarifas([])
     }
   }, [dateRange, selectedClientId])
@@ -84,7 +89,7 @@ export default function CostsPage() {
 
     try {
       // Todas las queries son independientes — se ejecutan en paralelo
-      const [transactionsData, allApplications, distributions, awsReportsData, gcpReportsData] =
+      const [transactionsData, allApplications, distributions, awsReportsData, gcpReportsData, licensesData] =
         await Promise.all([
           transactionsRepo.getByClientAndDateRange(
             selectedClientId,
@@ -106,6 +111,11 @@ export default function CostsPage() {
             dateRange.end
           ),
           gcpReportsRepo.getByClientAndDateRange(
+            selectedClientId,
+            dateRange.start,
+            dateRange.end
+          ),
+          licensesRepo.getByClientAndDateRange(
             selectedClientId,
             dateRange.start,
             dateRange.end
@@ -147,6 +157,7 @@ export default function CostsPage() {
       setApplications(applicationsData)
       setAwsReports(awsReportsData)
       setGcpReports(gcpReportsData)
+      setLicenses(licensesData)
     } catch (err: any) {
       setError(err.message || 'Error al cargar los costos')
     } finally {
@@ -200,7 +211,8 @@ export default function CostsPage() {
   const applicationsTotal = applications.reduce((sum, a) => sum + a.price, 0)
   const awsTotal = awsReports.reduce((sum, a) => sum + a.seller_cost, 0)
   const gcpTotal = gcpReports.reduce((sum, r) => sum + r.cost, 0)
-  const baseTotal = transactionsTotal + applicationsTotal + awsTotal + gcpTotal
+  const licensesTotal = licenses.reduce((sum, l) => sum + l.price, 0)
+  const baseTotal = transactionsTotal + applicationsTotal + awsTotal + gcpTotal + licensesTotal
 
   // Calcular tarifas aplicadas
   const tarifasAplicadas = tarifas.map((tarifa) => {
@@ -340,6 +352,31 @@ export default function CostsPage() {
           `$${r.cost.toFixed(2)}`,
         ]),
         foot: [['', '', 'Total GCP:', `$${gcpTotal.toFixed(2)}`]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [59, 130, 246] },
+        footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
+      })
+
+      y = (doc as any).lastAutoTable.finalY + 10
+    }
+
+    // Licencias table
+    if (licenses.length > 0) {
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Licencias', 14, y)
+      y += 4
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Fecha', 'Licencia', 'Responsable', 'Costo']],
+        body: licenses.map((r) => [
+          formatDate(r.date),
+          r.name,
+          r.responsable,
+          `$${r.price.toFixed(2)}`,
+        ]),
+        foot: [['', '', 'Total Licencias:', `$${licensesTotal.toFixed(2)}`]],
         styles: { fontSize: 9 },
         headStyles: { fillColor: [59, 130, 246] },
         footStyles: { fontStyle: 'bold', fillColor: [243, 244, 246] },
@@ -637,6 +674,49 @@ export default function CostsPage() {
                         </td>
                         <td className="px-4 py-3 text-sm font-bold text-gray-900">
                           ${gcpTotal.toFixed(2)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Sección de Licencias */}
+          <div className="rounded-lg bg-white p-6 shadow">
+            <h2 className="mb-4 text-xl font-bold text-gray-900">Licencias</h2>
+            {licenses.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay costos de licencias en el rango seleccionado</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-blue-50">
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Fecha</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Licencia</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Responsable</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Costo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {licenses.map((license) => (
+                        <tr key={license.id} className="border-b border-gray-100">
+                          <td className="px-4 py-3 text-sm text-gray-900">{formatDate(license.date)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{license.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{license.responsable}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">${license.price.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold text-gray-700">
+                          Total Licencias:
+                        </td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900">
+                          ${licensesTotal.toFixed(2)}
                         </td>
                       </tr>
                     </tfoot>
