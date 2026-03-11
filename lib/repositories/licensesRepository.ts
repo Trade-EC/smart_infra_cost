@@ -96,6 +96,26 @@ export class LicensesRepository {
     return { ...row, clients: [] }
   }
 
+  async update(
+    id: string,
+    data: Partial<Pick<CreateLicenseData, 'name' | 'responsable' | 'price'>>
+  ): Promise<License> {
+    const updates: Record<string, any> = {}
+    if (data.name !== undefined) updates.name = data.name.trim()
+    if (data.responsable !== undefined) updates.responsable = data.responsable.trim()
+    if (data.price !== undefined) updates.price = Math.abs(data.price)
+
+    const { data: row, error } = await this.supabase
+      .from('licenses')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return { ...row, clients: [] }
+  }
+
   async delete(id: string): Promise<void> {
     const { error } = await this.supabase.from('licenses').delete().eq('id', id)
     if (error) throw error
