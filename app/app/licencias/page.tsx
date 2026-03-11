@@ -32,6 +32,11 @@ export default function LicenciasPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [clientSelectors, setClientSelectors] = useState<Record<string, string[]>>({})
 
+  // Modal editar licencia
+  const [editingLicense, setEditingLicense] = useState<License | null>(null)
+  const [editForm, setEditForm] = useState({ nombre: '', responsable: '', precio: '' })
+  const [savingEdit, setSavingEdit] = useState(false)
+
   // Eliminar
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -100,6 +105,41 @@ export default function LicenciasPage() {
       setError(err.message || 'Error al crear la licencia')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const openEditModal = (license: License) => {
+    setEditingLicense(license)
+    setEditForm({
+      nombre: license.name,
+      responsable: license.responsable,
+      precio: license.price.toString(),
+    })
+    setError(null)
+  }
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingLicense) return
+    if (!editForm.nombre.trim()) { setError('El nombre es requerido'); return }
+    const precio = parseFloat(editForm.precio)
+    if (!editForm.precio || isNaN(precio) || precio < 0) { setError('El precio debe ser un número válido'); return }
+
+    setSavingEdit(true)
+    setError(null)
+    try {
+      await licensesRepo.update(editingLicense.id, {
+        name: editForm.nombre.trim(),
+        responsable: editForm.responsable.trim() || 'Sin asignar',
+        price: precio,
+      })
+      setEditingLicense(null)
+      await loadLicenses()
+      toast.success('Licencia actualizada correctamente')
+    } catch (err: any) {
+      setError(err.message || 'Error al actualizar la licencia')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -320,14 +360,24 @@ export default function LicenciasPage() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600">{formatDate(license.date)}</td>
                     <td className="px-4 py-3">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => handleDelete(license.id)}
-                        isLoading={deletingId === license.id}
-                      >
-                        Eliminar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(license)}
+                          className="rounded-full bg-blue-50 border border-blue-200 px-3 py-1 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onClick={() => handleDelete(license.id)}
+                          isLoading={deletingId === license.id}
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -347,6 +397,80 @@ export default function LicenciasPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Editar Licencia */}
+      {editingLicense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Editar Licencia</h2>
+              <button
+                type="button"
+                onClick={() => { setEditingLicense(null); setError(null) }}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <ErrorMessage message={error || ''} className="mb-4" />
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editForm.nombre}
+                  onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Responsable
+                </label>
+                <input
+                  type="text"
+                  value={editForm.responsable}
+                  onChange={(e) => setEditForm({ ...editForm, responsable: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Precio ($) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.precio}
+                  onChange={(e) => setEditForm({ ...editForm, precio: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => { setEditingLicense(null); setError(null) }}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="primary" isLoading={savingEdit}>
+                  Guardar
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nueva Licencia */}
       {showModal && (
