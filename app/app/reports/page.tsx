@@ -4,6 +4,10 @@ import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   AWSReportsRepository,
+  AWSReportClientsRepository,
+  GCPReportsRepository,
+  GCPReportClientsRepository,
+  LicensesRepository,
   ClientsRepository,
   ApplicationsRepository,
   TransactionsRepository,
@@ -58,6 +62,10 @@ export default function ReportsPage() {
   const [clients, setClients] = useState<Array<{ id: string; name: string }>>([])
   const supabase = useMemo(() => createClient(), [])
   const awsReportsRepo = useMemo(() => new AWSReportsRepository(supabase), [supabase])
+  const awsReportClientsRepo = useMemo(() => new AWSReportClientsRepository(supabase), [supabase])
+  const gcpReportsRepo = useMemo(() => new GCPReportsRepository(supabase), [supabase])
+  const gcpReportClientsRepo = useMemo(() => new GCPReportClientsRepository(supabase), [supabase])
+  const licensesRepo = useMemo(() => new LicensesRepository(supabase), [supabase])
   const clientsRepo = useMemo(() => new ClientsRepository(supabase), [supabase])
   const applicationsRepo = useMemo(() => new ApplicationsRepository(supabase), [supabase])
   const transactionsRepo = useMemo(() => new TransactionsRepository(supabase), [supabase])
@@ -198,14 +206,24 @@ export default function ReportsPage() {
 
       const clientIdToName = new Map(clientList.map(c => [c.id, c.name]))
 
-      // 1. Solo 4 consultas masivas en paralelo (evita cascada por cliente)
-      const [allAssignments, allDistributions, allAwsReports, allApplications] =
+      // 1. Consultas masivas en paralelo
+      const [allAssignments, allDistributions, allAwsReports, allApplications, allGcpReports, allLicenses] =
         await Promise.all([
           transactionsRepo.getAssignmentsByDateRange(startDate, endDate),
           distributionsRepo.getByDateRange(startDate, endDate),
           awsReportsRepo.getByDateRange(startDate, endDate),
           applicationsRepo.getAll({ dateFrom: startDate, dateTo: endDate }),
+          gcpReportsRepo.getByDateRange(startDate, endDate),
+          licensesRepo.getAll({ dateFrom: startDate, dateTo: endDate }),
         ])
+
+      // 2. Obtener asignaciones de clientes via tablas pivot (igual que módulo Costos)
+      const awsReportIds = (allAwsReports || []).map((r: any) => r.id)
+      const gcpReportIds = (allGcpReports || []).map((r: any) => r.id)
+      const [awsClientAssignments, gcpClientAssignments] = await Promise.all([
+        awsReportClientsRepo.getByReportIds(awsReportIds),
+        gcpReportClientsRepo.getByReportIds(gcpReportIds),
+      ])
 
       const groupedByMonth: Record<string, Record<string, number>> = {}
 
@@ -254,14 +272,39 @@ export default function ReportsPage() {
         })
       })
 
-      // D. AWS
-      ;(allAwsReports || []).forEach((r: any) => {
-        if (selectedClientId && r.client_id !== selectedClientId) return
-        const clientName = r.client_id
-          ? (clientIdToName.get(r.client_id) || 'Sin asignar')
-          : 'Sin asignar'
-        const monthKey = getMonthKey(r.date)
-        addToGroup(monthKey, clientName, r.seller_cost || 0)
+      // D. AWS — via tabla pivot aws_report_clients (consistente con módulo Costos)
+      const awsReportMap = new Map((allAwsReports || []).map((r: any) => [r.id, r]))
+      ;(awsClientAssignments || []).forEach((assignment) => {
+        if (selectedClientId && assignment.client_id !== selectedClientId) return
+        const report = awsReportMap.get(assignment.aws_report_id)
+        if (!report) return
+        const clientName = clientIdToName.get(assignment.client_id) || 'Sin nombre'
+        const monthKey = getMonthKey(report.date)
+        addToGroup(monthKey, clientName, report.seller_cost || 0)
+      })
+
+      // E. GCP — via tabla pivot gcp_report_clients (consistente con módulo Costos)
+      const gcpReportMap = new Map((allGcpReports || []).map((r: any) => [r.id, r]))
+      ;(gcpClientAssignments || []).forEach((assignment) => {
+        if (selectedClientId && assignment.client_id !== selectedClientId) return
+        const report = gcpReportMap.get(assignment.gcp_report_id)
+        if (!report) return
+        const clientName = clientIdToName.get(assignment.client_id) || 'Sin nombre'
+        const monthKey = getMonthKey(report.date)
+        addToGroup(monthKey, clientName, report.cost || 0)
+      })
+
+      // F. Licencias (precio completo por cliente, consistente con módulo Costos)
+      ;(allLicenses || []).forEach((license: any) => {
+        const monthKey = getMonthKey(license.date)
+        const price = license.price || 0
+        const licenseClients: any[] = license.clients || []
+        const toProcess = selectedClientId
+          ? licenseClients.filter((c: any) => c.id === selectedClientId)
+          : licenseClients
+        toProcess.forEach((c: any) => {
+          addToGroup(monthKey, c.name || 'Sin nombre', price)
+        })
       })
 
       const reportData = processGroupedData(groupedByMonth)
