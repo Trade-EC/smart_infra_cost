@@ -325,38 +325,33 @@ export default function ReportsPage() {
       const startMonth = getFirstDayOfMonth(dateRange.start)
       const endMonth = getLastDayOfMonth(dateRange.end)
 
-      // Obtener reportes AWS con relación a clientes
-      const { data: reports, error: reportsError } = await supabase
-        .from('aws_reports')
-        .select(`
-          seller_cost,
-          date,
-          client_id,
-          clients (
-            id,
-            name
-          )
-        `)
-        .gte('date', startMonth)
-        .lte('date', endMonth)
+      let clientList = clients
+      if (!clientList || clientList.length === 0) {
+        const data = await clientsRepo.getAll()
+        clientList = data.map(c => ({ id: c.id, name: c.name }))
+        setClients(clientList)
+      }
+      const clientIdToName = new Map(clientList.map(c => [c.id, c.name]))
 
-      if (reportsError) throw reportsError
+      // 1. Obtener todos los reportes AWS en el rango
+      const allAwsReports = await awsReportsRepo.getByDateRange(startMonth, endMonth)
 
-      // Agrupar por mes y cliente
+      // 2. Obtener asignaciones de clientes via tabla pivot
+      const awsReportIds = allAwsReports.map(r => r.id)
+      const awsClientAssignments = await awsReportClientsRepo.getByReportIds(awsReportIds)
+
+      // 3. Agrupar por mes y cliente
       const groupedByMonth: Record<string, Record<string, number>> = {}
-      
-      ;(reports || []).forEach((report: any) => {
+      const awsReportMap = new Map(allAwsReports.map(r => [r.id, r]))
+
+      ;(awsClientAssignments || []).forEach((assignment) => {
+        if (selectedClientId && assignment.client_id !== selectedClientId) return
+        const report = awsReportMap.get(assignment.aws_report_id)
+        if (!report) return
+        const clientName = clientIdToName.get(assignment.client_id) || 'Sin nombre'
         const monthKey = getMonthKey(report.date)
-        const clientId = report.client_id
-        const clientName = report.clients?.name || 'Sin asignar'
-        
-        // Filtrar por cliente si está seleccionado
-        if (selectedClientId && clientId !== selectedClientId) return
-        
-        if (!groupedByMonth[monthKey]) {
-          groupedByMonth[monthKey] = {}
-        }
-        groupedByMonth[monthKey][clientName] = (groupedByMonth[monthKey][clientName] || 0) + parseFloat(report.seller_cost || 0)
+        if (!groupedByMonth[monthKey]) groupedByMonth[monthKey] = {}
+        groupedByMonth[monthKey][clientName] = (groupedByMonth[monthKey][clientName] || 0) + (report.seller_cost || 0)
       })
 
       const reportData = processGroupedData(groupedByMonth)
